@@ -1,4 +1,4 @@
-// ===== SHIQ App v2.2.2 - إصلاح شامل ونهائي لمشكلة عرض الصور =====
+// ===== SHIQ App v2.3.0 - إصلاح شامل لمشكلة عرض الصور =====
 
 // إعدادات التطبيق
 const CONFIG = {
@@ -6,7 +6,7 @@ const CONFIG = {
     MAIN_SHEET_ID: '1ap6gkoczUsqvf0KMoxXroo2uP_wycDGxyg6r-UPFgBQ',
     WHATSAPP_NUMBER: '9647862799748',
     PHONE_NUMBER: '07862799748',
-    APP_VERSION: '2.2.2',
+    APP_VERSION: '2.3.0',
     APP_URL: 'https://peacepanel.github.io/shein-baghdad/',
     NOTIFICATIONS_ENABLED: true,
     FREE_DELIVERY_THRESHOLD: 50000,
@@ -22,9 +22,8 @@ const CONFIG = {
 
 // إعدادات Google Sheets API
 const apiKey = 'AIzaSyATs-nWgTonTFEKCi_4F5lQ_Ao0vnJ5Xmk';
-const phoneNumber = CONFIG.WHATSAPP_NUMBER;
 
-// تكوين الفئات
+// تكوين الفئات - النسخة الناجحة
 const categories = {
     'اكسسوارات نسائية': {
         sheetId: '1Tf1B4HqO5lnwxP8oSqzRMwmvegnIDJam-DMhQc8s5S8',
@@ -109,15 +108,20 @@ let deviceId = null;
 let currentCategory = '';
 let isOnline = navigator.onLine;
 
-// عناصر DOM
+// عناصر DOM - مُصححة
 const categoryContainer = document.getElementById('categoryContainer');
 const categoryNav = document.getElementById('category-nav');
 const workbookContainer = document.getElementById('workbook-container');
 const productContainer = document.getElementById('product-container');
 const searchBox = document.getElementById('searchBox');
 
-// ===== نظام معرف الجهاز والإشعارات التلقائي =====
+// ===== دوال مساعدة بسيطة =====
+function getColumnIndex(colLetter) {
+    if (!colLetter || typeof colLetter !== 'string') return 0;
+    return colLetter.charCodeAt(0) - 65; // A=0, B=1, C=2, etc.
+}
 
+// ===== نظام معرف الجهاز والإشعارات =====
 function generateDeviceId() {
     const timestamp = Date.now();
     const random = Math.random().toString(36).substr(2, 9);
@@ -232,7 +236,109 @@ async function updateDeviceNotificationStatus(deviceId, enabled) {
     }
 }
 
-// ===== دوال عرض المنتجات مع إصلاح مشكلة الصور =====
+// ===== تحميل صور الفئات - مُصحح تماماً =====
+async function loadCategoryImages() {
+    if (!categoryContainer) return;
+
+    console.log('🖼️ بدء تحميل صور الفئات...');
+
+    for (const [categoryName, categoryConfig] of Object.entries(categories)) {
+        try {
+            console.log('🔍 البحث عن صورة للفئة: ' + categoryName);
+            
+            const imageUrl = await getCategoryImageFromSheets(categoryConfig);
+            
+            if (imageUrl) {
+                console.log('✅ تم العثور على صورة للفئة "' + categoryName + '": ' + imageUrl.substring(0, 50) + '...');
+                categoryImagesCache[categoryName] = imageUrl;
+            } else {
+                console.warn('⚠️ لم يتم العثور على صورة للفئة "' + categoryName + '"');
+                categoryImagesCache[categoryName] = null;
+            }
+            
+            createCategoryElement(categoryName, categoryImagesCache[categoryName]);
+            
+        } catch (error) {
+            console.error('❌ خطأ في تحميل صورة الفئة "' + categoryName + '":', error);
+            createCategoryElement(categoryName, null);
+        }
+    }
+}
+
+async function getCategoryImageFromSheets(categoryConfig) {
+    const { sheetId, sheets, imageCol, priceCol } = categoryConfig;
+    
+    if (!imageCol || !sheets || sheets.length === 0) {
+        console.warn('⚠️ إعدادات الفئة غير مكتملة');
+        return null;
+    }
+
+    // البحث في جميع أوراق العمل للفئة
+    for (const sheetName of sheets) {
+        try {
+            console.log('🔍 البحث في ورقة العمل: ' + sheetName);
+            
+            // جلب البيانات من الأعمدة المطلوبة فقط
+            const range = `${sheetName}!${imageCol}2:${priceCol}20`; // جلب 19 صف من البيانات
+            const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?key=${apiKey}`;
+            
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (data.values && data.values.length > 0) {
+                console.log('📊 تم جلب ' + data.values.length + ' صف من ' + sheetName);
+                
+                // البحث عن أول صورة صالحة مع سعر
+                for (let i = 0; i < data.values.length; i++) {
+                    const row = data.values[i];
+                    const imageColIndex = getColumnIndex(imageCol);
+                    const priceColIndex = getColumnIndex(priceCol);
+                    
+                    // حساب الفهرس النسبي للسعر (نسبة إلى عمود الصورة)
+                    const relativePriceIndex = priceColIndex - imageColIndex;
+                    
+                    const imageUrl = row[0]; // عمود الصورة دائماً في الفهرس 0 للنطاق المحدد
+                    const price = row[relativePriceIndex]; // عمود السعر
+                    
+                    console.log('🔍 فحص الصف ' + (i + 2) + ': صورة="' + (imageUrl ? imageUrl.substring(0, 30) + '...' : 'فارغ') + '", سعر="' + price + '"');
+                    
+                    // التحقق من وجود صورة وسعر معاً
+                    if (imageUrl && price && validateImageUrl(imageUrl)) {
+                        const directUrl = convertToDirectLink(imageUrl);
+                        console.log('✅ تم العثور على صورة صالحة في ' + sheetName + ': ' + directUrl.substring(0, 50) + '...');
+                        return directUrl;
+                    }
+                }
+            } else {
+                console.log('⚠️ لا توجد بيانات في ورقة ' + sheetName);
+            }
+            
+        } catch (error) {
+            console.error('❌ خطأ في جلب البيانات من ' + sheetName + ':', error);
+            continue; // الانتقال لورقة العمل التالية
+        }
+    }
+    
+    console.warn(`⚠️ لم يتم العثور على صورة صالحة في أي ورقة عمل للفئة`);
+    return null;
+}
+
+function createCategoryElement(categoryName, imageUrl) {
+    const categoryDiv = document.createElement('div');
+    categoryDiv.className = 'category';
+    
+    const defaultImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjNmNGY2Ii8+PHRleHQgeD0iNTAlIiB5PSI0NSUiIGZvbnQtc2l6ZT0iMTQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5Y2EzYWYiPvCfm43vuI88L3RleHQ+PHRleHQgeD0iNTAlIiB5PSI2MCUiIGZvbnQtc2l6ZT0iMTIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5Y2EzYWYiPtiy2YjYsdipINi62YrYsSDZhdiq2KfYrdipPC90ZXh0Pjwvc3ZnPg==';
+    
+    const finalImageUrl = imageUrl || defaultImage;
+    
+    categoryDiv.innerHTML = `
+        <img src="${finalImageUrl}" alt="${categoryName}" onerror="this.src='${defaultImage}'" loading="lazy">
+        <div class="category-name">${categoryName}</div>
+    `;
+    
+    categoryDiv.onclick = () => loadWorkbooks(categoryName);
+    categoryContainer.appendChild(categoryDiv);
+}
 
 function createCategoryNav() {
     if (!categoryNav) return;
@@ -242,225 +348,19 @@ function createCategoryNav() {
         navBtn.className = 'nav-category-btn';
         navBtn.textContent = categoryName;
         navBtn.onclick = () => {
+            // Remove active class from all buttons
             document.querySelectorAll('.nav-category-btn').forEach(btn => 
                 btn.classList.remove('active'));
+            // Add active class to clicked button
             navBtn.classList.add('active');
+            // Load workbooks for this category
             loadWorkbooks(categoryName);
         };
         categoryNav.appendChild(navBtn);
     });
 }
 
-// ===== دالة التحقق من صحة رابط الصورة - محسنة =====
-function isValidImageUrl(url) {
-    if (!url || typeof url !== 'string') return false;
-    
-    const urlLower = url.toLowerCase().trim();
-    
-    // التحقق من وجود http أو https
-    if (!urlLower.includes('http')) return false;
-    
-    // التحقق من امتدادات الصور المدعومة
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.svg'];
-    const hasImageExtension = imageExtensions.some(ext => urlLower.includes(ext));
-    
-    // التحقق من خدمات الصور المعروفة
-    const imageServices = [
-        'drive.google.com',
-        'googleusercontent.com',
-        'imgur.com',
-        'unsplash.com',
-        'pexels.com',
-        'pixabay.com',
-        'dropbox.com',
-        'onedrive.com'
-    ];
-    const hasImageService = imageServices.some(service => urlLower.includes(service));
-    
-    return hasImageExtension || hasImageService;
-}
-
-// ===== دالة تحويل رابط Google Drive إلى رابط مباشر =====
-function convertGoogleDriveUrl(url) {
-    if (!url || !url.includes('drive.google.com')) return url;
-    
-    try {
-        // البحث عن معرف الملف في أشكال مختلفة من الروابط
-        const patterns = [
-            /\/d\/([a-zA-Z0-9_-]+)/,  // https://drive.google.com/file/d/FILE_ID/view
-            /id=([a-zA-Z0-9_-]+)/,   // https://drive.google.com/open?id=FILE_ID
-            /\/([a-zA-Z0-9_-]+)\/view/ // تنسيقات أخرى
-        ];
-        
-        for (const pattern of patterns) {
-            const match = url.match(pattern);
-            if (match) {
-                const fileId = match[1];
-                const directUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
-                console.log(`🔄 تم تحويل رابط Google Drive: ${fileId}`);
-                return directUrl;
-            }
-        }
-        
-        console.warn(⚠️ لم يتم العثور على معرف الملف في رابط Google Drive:', url);
-        return url;
-        
-    } catch (error) {
-        console.error('❌ خطأ في تحويل رابط Google Drive:', error);
-        return url;
-    }
-}
-
-// ===== دالة تحميل صور الفئات - محسنة ومصححة =====
-function loadCategoryImages() {
-    if (!categoryContainer) {
-        console.error('❌ عنصر categoryContainer غير موجود');
-        return;
-    }
-
-    console.log('🖼️ بدء تحميل صور الفئات...');
-    console.log('🔍 عدد الفئات:', Object.keys(categories).length);
-
-    Object.keys(categories).forEach((categoryName, index) => {
-        const category = categories[categoryName];
-
-        console.log(`\n📂 معالجة الفئة ${index + 1}: "${categoryName}"`);
-        console.log('📊 إعدادات الفئة:', {
-            sheetId: category.sheetId,
-            imageCol: category.imageCol,
-            priceCol: category.priceCol,
-            sheetsCount: category.sheets?.length || 0
-        });
-
-        // التحقق من البيانات المطلوبة
-        if (!category.sheetId) {
-            console.error(`❌ معرف الجدول مفقود للفئة "${categoryName}"`);
-            createCategoryElement(categoryName, '');
-            return;
-        }
-
-        if (!category.imageCol) {
-            console.error(`❌ عمود الصور مفقود للفئة "${categoryName}"`);
-            createCategoryElement(categoryName, '');
-            return;
-        }
-
-        // إعداد المعاملات للبحث
-        const sheetId = category.sheetId;
-        const imageCol = category.imageCol;
-        const searchRange = `${imageCol}2:${imageCol}30`; // البحث في 29 صف
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${searchRange}?key=${apiKey}`;
-
-        console.log(`🌐 رابط الطلب: ${url}`);
-
-        // جلب البيانات
-        fetch(url)
-            .then(response => {
-                console.log(`📡 استجابة الطلب للفئة "${categoryName}":`, response.status, response.statusText);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                return response.json();
-            })
-            .then(data => {
-                console.log(`📦 بيانات مستلمة للفئة "${categoryName}":`, data);
-
-                let imageUrl = '';
-                let foundRowNumber = -1;
-
-                if (data.values && data.values.length > 0) {
-                    console.log(`🔍 البحث في ${data.values.length} صف للعثور على صورة صالحة...`);
-
-                    // البحث في جميع الصفوف
-                    for (let i = 0; i < data.values.length; i++) {
-                        const cellValue = data.values[i][0];
-                        const currentRow = i + 2; // +2 لأن البحث يبدأ من الصف 2
-
-                        console.log(`   📍 فحص الصف ${currentRow}: "${cellValue}"`);
-
-                        if (cellValue && typeof cellValue === 'string' && cellValue.trim() !== '') {
-                            const cleanedValue = cellValue.trim();
-
-                            if (isValidImageUrl(cleanedValue)) {
-                                imageUrl = convertGoogleDriveUrl(cleanedValue);
-                                foundRowNumber = currentRow;
-                                console.log(`   ✅ تم العثور على صورة صالحة في الصف ${currentRow}`);
-                                console.log(`   🔗 الرابط النهائي: ${imageUrl}`);
-                                break;
-                            } else {
-                                console.log(`   ❌ الرابط غير صالح في الصف ${currentRow}: ${cleanedValue}`);
-                            }
-                        } else {
-                            console.log(`   ⚪ الصف ${currentRow} فارغ أو غير صالح`);
-                        }
-                    }
-
-                    if (!imageUrl) {
-                        console.warn(`⚠️ لم يتم العثور على أي صورة صالحة للفئة "${categoryName}" في ${data.values.length} صف`);
-                    }
-                } else {
-                    console.warn(`⚠️ لا توجد بيانات للفئة "${categoryName}"`);
-                }
-
-                // إنشاء عنصر الفئة
-                createCategoryElement(categoryName, imageUrl, foundRowNumber);
-            })
-            .catch(error => {
-                console.error(`❌ خطأ في تحميل صورة الفئة "${categoryName}":`, error);
-                createCategoryElement(categoryName, '', -1);
-            });
-    });
-}
-
-// ===== دالة إنشاء عنصر الفئة - محسنة =====
-function createCategoryElement(categoryName, imageUrl, rowNumber = -1) {
-    console.log(`🏗️ إنشاء عنصر الفئة: "${categoryName}"`);
-    console.log(`   🖼️ رابط الصورة: ${imageUrl || 'لا توجد صورة'}`);
-    console.log(`   📍 رقم الصف: ${rowNumber > 0 ? rowNumber : 'غير محدد'}`);
-
-    const categoryDiv = document.createElement('div');
-    categoryDiv.className = 'category';
-    
-    // صورة افتراضية جميلة مع اسم الفئة
-    const defaultImage = `data:image/svg+xml;base64,${btoa(`
-        <svg width="300" height="250" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#8B5CF6"/>
-                    <stop offset="50%" stop-color="#A855F7"/>
-                    <stop offset="100%" stop-color="#C084FC"/>
-                </linearGradient>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grad1)"/>
-            <text x="50%" y="45%" font-size="60" text-anchor="middle" fill="white" opacity="0.9">🛍️</text>
-            <text x="50%" y="65%" font-size="16" text-anchor="middle" fill="white" opacity="0.8">${categoryName}</text>
-            <text x="50%" y="80%" font-size="12" text-anchor="middle" fill="white" opacity="0.6">صورة قادمة قريباً</text>
-        </svg>
-    `)}`;
-    
-    // تحديد الصورة النهائية
-    const finalImageUrl = imageUrl && imageUrl.trim() !== '' ? imageUrl : defaultImage;
-    
-    categoryDiv.innerHTML = `
-        <img src="${finalImageUrl}" 
-             alt="${categoryName}" 
-             onerror="this.src='${defaultImage}'; console.error('❌ فشل تحميل صورة الفئة: ${categoryName}');"
-             onload="console.log('✅ تم تحميل صورة الفئة: ${categoryName}');"
-             loading="lazy">
-        <div class="category-name">${categoryName}</div>
-    `;
-    
-    categoryDiv.onclick = () => {
-        console.log(`👆 تم النقر على الفئة: ${categoryName}`);
-        loadWorkbooks(categoryName);
-    };
-    
-    categoryContainer.appendChild(categoryDiv);
-    console.log(`✅ تم إضافة عنصر الفئة "${categoryName}" للصفحة`);
-}
-
+// Load workbooks for a category
 function loadWorkbooks(categoryName) {
     console.log('🎯 تم اختيار الفئة:', categoryName);
     currentCategory = categoryName;
@@ -470,8 +370,11 @@ function loadWorkbooks(categoryName) {
     workbookContainer.innerHTML = '';
     productContainer.innerHTML = '<div class="default-message">اختر قسماً من الأقسام أعلاه لعرض المنتجات <span class="emoji-icon">👆</span></div>';
     
+    // Clear previous search
     if (searchBox) {
         searchBox.value = '';
+        
+        // Show search box only for specific categories
         if (categoryName === 'احذية وحقائب متنوعة') {
             searchBox.style.display = 'block';
             searchBox.placeholder = '🔍 ابحث بالمقاس أو نوع الحذاء...';
@@ -492,53 +395,45 @@ function loadWorkbooks(categoryName) {
         workbookContainer.appendChild(workbookDiv);
     });
 
+    // Smooth scroll to workbooks section
     workbookContainer.scrollIntoView({ behavior: 'smooth' });
     
     trackAction('select_category', { category: categoryName });
 }
 
-// ===== دالة تحميل المنتجات - محسنة =====
+// ===== تحميل المنتجات - النسخة الناجحة =====
 function loadProducts(categoryName, workbook) {
-    console.log('\n📖 تحميل دفتر العمل:', workbook, 'من الفئة:', categoryName);
+    console.log('📖 تحميل دفتر العمل:', workbook, 'من الفئة:', categoryName);
     
-    if (!productContainer) return;
-    
-    const category = categories[categoryName];
-    if (!category) {
-        console.error('❌ الفئة غير موجودة:', categoryName);
-        return;
-    }
-    
-    const sheetId = category.sheetId;
-    const range = `${workbook}!A1:Z`; // نطاق واسع لضمان جلب جميع البيانات
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?key=${apiKey}`;
-    const imageCol = category.imageCol;
-    const priceCol = category.priceCol;
-    const sizeCol = category.sizeCol || null;
-
-    console.log(`📊 إعدادات التحميل:`);
-    console.log(`   🗂️ معرف الجدول: ${sheetId}`);
-    console.log(`   📋 ورقة العمل: ${workbook}`);
-    console.log(`   🖼️ عمود الصور: ${imageCol}`);
-    console.log(`   💰 عمود الأسعار: ${priceCol}`);
-    console.log(`   📏 عمود المقاسات: ${sizeCol || 'غير محدد'}`);
+    const sheetId = categories[categoryName].sheetId;
+    const range = workbook + '!A1:O';
+    const url = 'https://sheets.googleapis.com/v4/spreadsheets/' + sheetId + '/values/' + range + '?key=' + apiKey;
+    const imageCol = categories[categoryName].imageCol;
+    const priceCol = categories[categoryName].priceCol;
+    const sizeCol = categories[categoryName].sizeCol || null;
 
     productContainer.innerHTML = '<div class="loading">جار التحميل...</div>';
     
-    if (searchBox) searchBox.value = '';
+    // Clear previous search
+    if (searchBox) {
+        searchBox.value = '';
+        
+        // Show search box only for specific categories
+        if (categoryName === 'احذية وحقائب متنوعة') {
+            searchBox.style.display = 'block';
+            searchBox.placeholder = '🔍 ابحث بالمقاس أو نوع الحذاء...';
+        } else if (categoryName === 'مستلزمات موبايل') {
+            searchBox.style.display = 'block';
+            searchBox.placeholder = '🔍 ابحث بنوع الموبايل أو الاكسسوار...';
+        } else {
+            searchBox.style.display = 'none';
+        }
+    }
 
     fetch(url)
-        .then(response => {
-            console.log(`📡 استجابة طلب المنتجات:`, response.status, response.statusText);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            console.log('📦 بيانات المنتجات المستلمة:', data);
-            
-            const products = data.values ? data.values.slice(1) : []; // تجاهل الصف الأول (العناوين)
+            const products = data.values ? data.values.slice(1) : [];
             productContainer.innerHTML = '';
 
             if (products.length === 0) {
@@ -546,201 +441,113 @@ function loadProducts(categoryName, workbook) {
                 return;
             }
 
-            let validProductsCount = 0;
-            let skippedProductsCount = 0;
-            
-            console.log(`🔍 معالجة ${products.length} منتج...`);
-
-            products.forEach((product, index) => {
-                const rowNumber = index + 2; // +2 لأن الصف الأول هو العناوين والفهرس يبدأ من 0
-                
-                console.log(`\n📦 معالجة المنتج ${validProductsCount + 1} - الصف ${rowNumber}:`);
-
-                // التحقق من وجود اسم المنتج
-                if (!product[0] || product[0].toString().trim() === '') {
-                    console.log(`   ⚠️ تم تجاهل الصف ${rowNumber} - لا يوجد اسم منتج`);
-                    skippedProductsCount++;
-                    return;
-                }
-
-                const productName = product[0].toString().trim();
-                console.log(`   📝 اسم المنتج: "${productName}"`);
-
-                // التحقق من وجود السعر
-                const priceColIndex = priceCol.charCodeAt(0) - 65;
-                const productPrice = product[priceColIndex];
-                
-                if (!productPrice || productPrice.toString().trim() === '') {
-                    console.log(`   ⚠️ تم تجاهل المنتج "${productName}" - لا يوجد سعر`);
-                    skippedProductsCount++;
-                    return;
-                }
-
-                console.log(`   💰 السعر: ${productPrice}`);
-
-                // التحقق من وجود الصورة
-                const imageColIndex = imageCol.charCodeAt(0) - 65;
-                const productImage = product[imageColIndex];
-                
-                if (!productImage || productImage.toString().trim() === '') {
-                    console.log(`   ⚠️ تم تجاهل المنتج "${productName}" - لا توجد صورة`);
-                    skippedProductsCount++;
-                    return;
-                }
-
-                const cleanedImageUrl = productImage.toString().trim();
-                console.log(`   🖼️ رابط الصورة الخام: ${cleanedImageUrl}`);
-
-                if (!isValidImageUrl(cleanedImageUrl)) {
-                    console.log(`   ❌ تم تجاهل المنتج "${productName}" - رابط الصورة غير صالح`);
-                    skippedProductsCount++;
-                    return;
-                }
-
-                const finalImageUrl = convertGoogleDriveUrl(cleanedImageUrl);
-                console.log(`   ✅ رابط الصورة النهائي: ${finalImageUrl}`);
-
-                // معالجة المقاس إن وجد
-                let productSize = null;
-                if (sizeCol) {
-                    const sizeColIndex = sizeCol.charCodeAt(0) - 65;
-                    productSize = product[sizeColIndex] ? product[sizeColIndex].toString().trim() : 'غير محدد';
-                    console.log(`   📏 المقاس: ${productSize}`);
-                }
-
-                // إنشاء عنصر المنتج
-                createProductElement(product, imageCol, priceCol, sizeCol, rowNumber);
-                validProductsCount++;
-                
-                console.log(`   ✅ تم إنشاء المنتج بنجاح`);
+            products.forEach(product => {
+                if (!product[0] || !product[imageCol.charCodeAt(0) - 65]) return;
+                createProductElement(product, imageCol, priceCol, sizeCol);
             });
 
             updateCartButtons();
+            // Smooth scroll to products section
             productContainer.scrollIntoView({ behavior: 'smooth' });
-            
-            console.log(`\n📊 ملخص التحميل:`);
-            console.log(`   ✅ منتجات صالحة: ${validProductsCount}`);
-            console.log(`   ⚠️ منتجات تم تجاهلها: ${skippedProductsCount}`);
-            console.log(`   📦 إجمالي الصفوف: ${products.length}`);
         })
         .catch(error => {
-            console.error('❌ خطأ في تحميل المنتجات:', error);
+            console.error('Error loading products:', error);
             productContainer.innerHTML = '<div class="default-message">حدث خطأ في تحميل المنتجات <span class="emoji-icon">😞</span></div>';
         });
-    
+        
     trackAction('load_workbook', { category: categoryName, workbook: workbook });
 }
 
-// ===== دالة إنشاء عنصر المنتج - محسنة =====
-function createProductElement(product, imageCol, priceCol, sizeCol, rowNumber = 0) {
-    if (!productContainer) return;
-    
-    console.log(`🏗️ إنشاء عنصر المنتج - الصف ${rowNumber}`);
-    
-    const defaultProductImage = `data:image/svg+xml;base64,${btoa(`
-        <svg width="300" height="300" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-                <linearGradient id="prodGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stop-color="#f0f0f0"/>
-                    <stop offset="100%" stop-color="#e5e7eb"/>
-                </linearGradient>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#prodGrad)"/>
-            <text x="50%" y="45%" font-size="40" text-anchor="middle" fill="#999">🛍️</text>
-            <text x="50%" y="65%" font-size="14" text-anchor="middle" fill="#999">صورة غير متاحة</text>
-            <text x="50%" y="80%" font-size="10" text-anchor="middle" fill="#bbb">جار التحميل...</text>
-        </svg>
-    `)}`;
+// Create product element - معدلة للعمل مع نظام السلة الجديد
+function createProductElement(product, imageCol, priceCol, sizeCol) {
+    const defaultProductImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTQiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIiBmaWxsPSIjOTk5Ij7YtdmI2LHYqSDYrdin2YTZiNeKPC90ZXh0Pjwvc3ZnPic=';
     
     const productName = product[0];
     const productPrice = product[priceCol.charCodeAt(0) - 65];
     const productImage = product[imageCol.charCodeAt(0) - 65];
     const productSize = sizeCol ? (product[sizeCol.charCodeAt(0) - 65] || 'غير محدد') : null;
     
-    console.log(`   📝 المنتج: "${productName}"`);
-    console.log(`   💰 السعر: ${productPrice}`);
-    console.log(`   🖼️ الصورة: ${productImage}`);
-    console.log(`   📏 المقاس: ${productSize || 'غير محدد'}`);
-    
-    // معالجة رابط الصورة
-    let finalImageUrl = defaultProductImage;
-    
-    if (productImage && productImage.toString().trim() !== '') {
-        const cleanedImageUrl = productImage.toString().trim();
-        
-        if (isValidImageUrl(cleanedImageUrl)) {
-            finalImageUrl = convertGoogleDriveUrl(cleanedImageUrl);
-            console.log(`   ✅ رابط الصورة النهائي: ${finalImageUrl}`);
-        } else {
-            console.log(`   ⚠️ رابط الصورة غير صالح، استخدام الصورة الافتراضية`);
-        }
-    } else {
-        console.log(`   ❌ لا توجد صورة، استخدام الصورة الافتراضية`);
-    }
-    
+    // تحقق من وجود المنتج في السلة
     const isInCart = selectedProducts.some(p => p.name === productName);
     
     const productDiv = document.createElement('div');
     productDiv.className = 'product';
+    
+    // تنظيف النصوص للاستخدام في الـ JavaScript
+    const cleanProductName = productName.replace(/'/g, "\\'").replace(/"/g, '\\"');
+    const cleanImageUrl = productImage.replace(/'/g, "\\'").replace(/"/g, '\\"');
+    
     productDiv.innerHTML = `
-        <img src="${finalImageUrl}" 
-             alt="${productName}" 
-             onclick="enlargeImage('${finalImageUrl}')"
-             onerror="console.error('❌ خطأ في تحميل صورة المنتج: ${productName}'); this.src='${defaultProductImage}'"
-             onload="console.log('✅ تم تحميل صورة المنتج: ${productName}')"
-             loading="lazy">
+        <img src="${productImage}" alt="Product Image" 
+             onclick="enlargeImage('${cleanImageUrl}')"
+             onerror="this.src='${defaultProductImage}'" loading="lazy">
         <div class="product-info">
             <div class="product-code">${productName}</div>
             <div class="product-price">
                 <span class="price-icon">💰</span>
                 ${parseInt(productPrice).toLocaleString()} دينار
             </div>
-            ${productSize ? `<div class="product-size">
+            ${sizeCol ? `<div class="product-size">
                 <span class="size-icon">📏</span>
                 المقاس: ${productSize}
             </div>` : ''}
             <button class="add-to-cart-btn ${isInCart ? 'selected' : ''}" 
                     data-product-name="${productName}"
-                    onclick="addToCart('${productName}', '${productPrice}', '${finalImageUrl}')">
+                    onclick="addToCart('${cleanProductName}', '${productPrice}', '${cleanImageUrl}')">
                 ${isInCart ? '✅ في السلة' : '🛒 أضف للسلة'}
             </button>
         </div>
     `;
     productContainer.appendChild(productDiv);
-    
-    console.log(`   ✅ تم إضافة المنتج للصفحة`);
 }
 
+// Search products - النسخة البسيطة
 function searchProduct() {
     if (!searchBox || !productContainer) return;
     
-    const query = searchBox.value.toLowerCase().trim();
+    const query = searchBox.value.toLowerCase();
     const productDivs = productContainer.getElementsByClassName('product');
 
-    if (query === '') {
-        Array.from(productDivs).forEach(div => {
-            div.style.display = 'block';
-        });
-        return;
-    }
-
-    let visibleCount = 0;
     Array.from(productDivs).forEach(div => {
         const allText = div.textContent.toLowerCase();
         
         if (allText.includes(query)) {
             div.style.display = 'block';
-            visibleCount++;
         } else {
             div.style.display = 'none';
         }
     });
     
-    console.log('🔍 نتائج البحث:', visibleCount, 'منتج للبحث عن:', query);
-    trackAction('search_products', { query: query, resultsCount: visibleCount, category: currentCategory });
+    // تتبع البحث
+    trackAction('search_products', { query: query, category: currentCategory });
 }
 
-// ===== دوال إدارة المستخدمين =====
+// Enlarge image - النسخة البسيطة
+function enlargeImage(src) {
+    const overlay = document.getElementById('overlay');
+    const enlargedImage = document.getElementById('enlargedImage');
+    
+    if (overlay && enlargedImage) {
+        enlargedImage.src = src;
+        overlay.style.display = 'flex';
+        
+        // Prevent body scroll when overlay is open
+        document.body.style.overflow = 'hidden';
+        
+        trackAction('view_enlarged_image', { imageUrl: src });
+    }
+}
+
+// Close enlarged image - النسخة البسيطة
+function closeEnlargedImage() {
+    const overlay = document.getElementById('overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+}
+
+// ===== إدارة المستخدمين =====
 
 function generateUserId() {
     const timestamp = Date.now();
@@ -796,7 +603,7 @@ function updateUserWelcome() {
     
     if (currentUser && welcomeDiv) {
         const firstName = currentUser.name.split(' ')[0];
-        welcomeDiv.innerHTML = `مرحباً ${firstName} من ${currentUser.governorate} 👋`;
+        welcomeDiv.innerHTML = 'مرحباً ' + firstName + ' من ' + currentUser.governorate + ' 👋';
         welcomeDiv.style.display = 'block';
         
         if (profileBtn) {
@@ -805,7 +612,7 @@ function updateUserWelcome() {
     }
 }
 
-// ===== دوال السلة =====
+// ===== إدارة السلة =====
 
 function saveCartToStorage() {
     try {
@@ -846,7 +653,7 @@ function addToCart(name, price, imageUrl) {
     if (existingProductIndex !== -1) {
         selectedProducts[existingProductIndex].quantity = (selectedProducts[existingProductIndex].quantity || 1) + 1;
         selectedProducts[existingProductIndex].lastUpdated = new Date().toISOString();
-        showNotificationSuccess(`📦 تم زيادة كمية "${name}" في السلة`);
+        showNotificationSuccess('📦 تم زيادة كمية "' + name + '" في السلة');
     } else {
         const product = {
             id: 'prod_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
@@ -859,7 +666,7 @@ function addToCart(name, price, imageUrl) {
         };
         
         selectedProducts.push(product);
-        showNotificationSuccess(`✅ تم إضافة "${name}" للسلة`);
+        showNotificationSuccess('✅ تم إضافة "' + name + '" للسلة');
     }
     
     saveCartToStorage();
@@ -912,8 +719,8 @@ function updateCartButton() {
         if (totalItems > 0) {
             cartButton.innerHTML = `
                 <span>🛒</span>
-                <span>السلة (${totalItems})</span>
-                <span style="font-size: 0.9em; opacity: 0.9;">${totalPrice.toLocaleString()} د.ع</span>
+                <span>السلة (` + totalItems + `)</span>
+                <span style="font-size: 0.9em; opacity: 0.9;">` + totalPrice.toLocaleString() + ` د.ع</span>
             `;
             cartButton.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
         } else {
@@ -946,9 +753,11 @@ function createCartReviewWindow() {
     let productsHtml = '';
     selectedProducts.forEach((product, index) => {
         const itemTotal = (parseFloat(product.price) || 0) * (product.quantity || 1);
+        const cleanProductName = product.name.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+        
         productsHtml += `
             <div class="cart-item" style="display: flex; align-items: center; padding: 15px; border: 2px solid #e5e7eb; margin: 10px 0; border-radius: 15px; background: #f9fafb;">
-                <img src="${product.imageUrl}" alt="${product.name}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 10px; margin-left: 15px;">
+                <img src="${product.imageUrl}" alt="${cleanProductName}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 10px; margin-left: 15px;">
                 <div style="flex: 1;">
                     <h4 style="margin: 0 0 5px 0; color: #1f2937;">${product.name}</h4>
                     <p style="margin: 0; color: #ef4444; font-weight: bold;">${(parseFloat(product.price) || 0).toLocaleString()} د.ع × ${product.quantity || 1}</p>
@@ -1193,32 +1002,32 @@ function proceedToWhatsAppFromReview() {
     
     sendOrderToSheets(orderData);
     
-    let message = `🛍️ طلب جديد من تطبيق شي ان العراق v${CONFIG.APP_VERSION}\n\n`;
+    let message = '🛍️ طلب جديد من تطبيق شي ان العراق v' + CONFIG.APP_VERSION + '\n\n';
     message += `👤 معلومات العميل:\n`;
-    message += `📛 الاسم: ${currentUser.name}\n`;
-    message += `📞 الهاتف: ${currentUser.phone}\n`;
-    message += `🏠 المحافظة: ${currentUser.governorate}\n`;
-    message += `📍 العنوان التفصيلي: ${currentUser.address}\n`;
-    message += `🆔 معرف العميل: ${currentUser.id}\n\n`;
+    message += '📛 الاسم: ' + currentUser.name + '\n';
+    message += '📞 الهاتف: ' + currentUser.phone + '\n';
+    message += '🏠 المحافظة: ' + currentUser.governorate + '\n';
+    message += '📍 العنوان التفصيلي: ' + currentUser.address + '\n';
+    message += '🆔 معرف العميل: ' + currentUser.id + '\n\n';
     
     message += `🛒 تفاصيل الطلب:\n`;
-    message += `📦 عدد المنتجات: ${selectedProducts.length} منتج\n`;
-    message += `📊 إجمالي القطع: ${selectedProducts.reduce((sum, p) => sum + p.quantity, 0)} قطعة\n\n`;
+    message += '📦 عدد المنتجات: ' + selectedProducts.length + ' منتج\n';
+    message += '📊 إجمالي القطع: ' + selectedProducts.reduce((sum, p) => sum + p.quantity, 0) + ' قطعة\n\n';
     
     message += `🏷️ المنتجات المطلوبة:\n`;
     selectedProducts.forEach((product, index) => {
         const itemTotal = (parseFloat(product.price) || 0) * (product.quantity || 1);
-        message += `\n${index + 1}. ${product.name}\n`;
-        message += `   💰 السعر: ${(parseFloat(product.price) || 0).toLocaleString()} د.ع\n`;
-        message += `   📦 الكمية: ${product.quantity || 1}\n`;
-        message += `   💵 المجموع: ${itemTotal.toLocaleString()} د.ع\n`;
-        message += `   🔗 الصورة: ${product.imageUrl}\n`;
+        message += '\n' + (index + 1) + '. ' + product.name + '\n';
+        message += '   💰 السعر: ' + (parseFloat(product.price) || 0).toLocaleString() + ' د.ع\n';
+        message += '   📦 الكمية: ' + (product.quantity || 1) + '\n';
+        message += '   💵 المجموع: ' + itemTotal.toLocaleString() + ' د.ع\n';
+        message += '   🔗 الصورة: ' + product.imageUrl + '\n';
     });
 
     message += `\n📊 ملخص الطلب:\n`;
-    message += `💰 المجموع الفرعي: ${subtotal.toLocaleString()} د.ع\n`;
-    message += `🚚 رسوم التوصيل: ${deliveryFee === 0 ? 'مجاني 🎉' : deliveryFee.toLocaleString() + ' د.ع'}\n`;
-    message += `💵 المجموع الكلي: ${total.toLocaleString()} د.ع\n\n`;
+    message += '💰 المجموع الفرعي: ' + subtotal.toLocaleString() + ' د.ع\n';
+    message += '🚚 رسوم التوصيل: ' + (deliveryFee === 0 ? 'مجاني 🎉' : deliveryFee.toLocaleString() + ' د.ع') + '\n';
+    message += '💵 المجموع الكلي: ' + total.toLocaleString() + ' د.ع\n\n';
     
     message += `📋 معلومات إضافية:\n`;
     message += `📅 تاريخ الطلب: ${new Date().toLocaleDateString('ar-IQ')}\n`;
@@ -1227,9 +1036,9 @@ function proceedToWhatsAppFromReview() {
     message += `🚚 التوصيل: خدمة التوصيل العادية\n\n`;
     
     message += `✅ يرجى تأكيد الطلب وتحديد موعد التسليم.\n`;
-    message += `🚚 التوصيل متاح لجميع مناطق ${currentUser.governorate}\n`;
-    message += `📞 للاستفسار: ${CONFIG.PHONE_NUMBER}\n`;
-    message += `🌐 التطبيق: ${CONFIG.APP_URL}`;
+    message += '🚚 التوصيل متاح لجميع مناطق ' + currentUser.governorate + '\n';
+    message += '📞 للاستفسار: ' + CONFIG.PHONE_NUMBER + '\n';
+    message += '🌐 التطبيق: ' + CONFIG.APP_URL;
 
     const whatsappLink = `https://api.whatsapp.com/send?phone=${CONFIG.WHATSAPP_NUMBER}&text=${encodeURIComponent(message)}`;
     
@@ -1267,7 +1076,7 @@ function clearCart() {
     trackAction('clear_cart', { cartWasEmpty: false });
 }
 
-// ===== دوال التسجيل =====
+// ===== إدارة التسجيل =====
 
 function showUserRegistration() {
     const modal = document.getElementById('userRegistrationModal');
@@ -1321,7 +1130,7 @@ async function handleUserRegistration(event) {
         closeUserRegistration();
         
         const firstName = userData.name.split(' ')[0];
-        showNotificationSuccess(`🎉 مرحباً ${firstName}! تم تسجيلك بنجاح في شي ان العراق`);
+        showNotificationSuccess('🎉 مرحباً ' + firstName + '! تم تسجيلك بنجاح في شي ان العراق');
         
         trackAction('user_registered', {
             governorate: userData.governorate,
@@ -1335,7 +1144,7 @@ async function handleUserRegistration(event) {
     }
 }
 
-// ===== دوال إرسال البيانات =====
+// ===== إرسال البيانات =====
 
 async function sendUserDataToSheets(userData) {
     try {
@@ -1344,7 +1153,7 @@ async function sendUserDataToSheets(userData) {
             userData: {
                 ...userData,
                 timestamp: new Date().toISOString(),
-                source: 'web_app_v2.2'
+                source: 'web_app_v2.3'
             }
         };
         
@@ -1373,7 +1182,7 @@ async function sendOrderToSheets(orderData) {
             orderData: {
                 ...orderData,
                 timestamp: new Date().toISOString(),
-                source: 'web_app_v2.2'
+                source: 'web_app_v2.3'
             }
         };
         
@@ -1505,7 +1314,7 @@ function closeEnlargedImage() {
     }
 }
 
-// ===== دوال الملف الشخصي =====
+// ===== الملف الشخصي =====
 
 function openUserProfile() {
     if (!currentUser) {
@@ -1596,7 +1405,7 @@ function editUserProfile() {
     trackAction('edit_profile', {});
 }
 
-// ===== إعداد أحداث العامة =====
+// ===== إعداد الأحداث =====
 
 function setupEventListeners() {
     const overlay = document.getElementById('overlay');
@@ -1633,93 +1442,9 @@ function setupEventListeners() {
     });
 }
 
-// ===== دوال الاختبار والتشخيص =====
-
-function testImageLoading() {
-    console.log('\n🧪 =========================');
-    console.log('🧪 اختبار تحميل الصور');
-    console.log('🧪 =========================');
-    
-    // اختبار فئة واحدة
-    const testCategory = Object.keys(categories)[0];
-    const category = categories[testCategory];
-    
-    console.log(`🔍 اختبار الفئة: "${testCategory}"`);
-    console.log(`📊 إعدادات الفئة:`, category);
-    
-    const imageRange = `${category.imageCol}2:${category.imageCol}10`;
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${category.sheetId}/values/${imageRange}?key=${apiKey}`;
-    
-    console.log(`🌐 رابط الاختبار: ${url}`);
-    
-    fetch(url)
-        .then(response => {
-            console.log(`📡 استجابة الاختبار:`, response.status, response.statusText);
-            return response.json();
-        })
-        .then(data => {
-            console.log('📦 بيانات الاختبار:', data);
-            
-            if (data.values && data.values.length > 0) {
-                console.log(`🔍 فحص ${data.values.length} خلية:`);
-                
-                data.values.forEach((row, index) => {
-                    const cell = row[0];
-                    const rowNum = index + 2;
-                    
-                    console.log(`📍 الصف ${rowNum}: "${cell}"`);
-                    
-                    if (cell && isValidImageUrl(cell)) {
-                        const convertedUrl = convertGoogleDriveUrl(cell);
-                        console.log(`   ✅ رابط صالح - الأصلي: ${cell}`);
-                        console.log(`   🔄 بعد التحويل: ${convertedUrl}`);
-                    } else {
-                        console.log(`   ❌ رابط غير صالح أو فارغ`);
-                    }
-                });
-            } else {
-                console.log('❌ لا توجد بيانات في الاختبار');
-            }
-            
-            console.log('🧪 =========================');
-            console.log('🧪 انتهى الاختبار');
-            console.log('🧪 =========================\n');
-        })
-        .catch(error => {
-            console.error('❌ خطأ في الاختبار:', error);
-        });
-}
-
-function debugCategoryImages() {
-    console.log('\n🔧 =========================');
-    console.log('🔧 تشخيص صور الفئات');
-    console.log('🔧 =========================');
-    
-    console.log('🔍 فحص إعدادات الفئات:');
-    Object.keys(categories).forEach((categoryName, index) => {
-        const category = categories[categoryName];
-        console.log(`\n📂 ${index + 1}. "${categoryName}":`);
-        console.log(`   📊 معرف الجدول: ${category.sheetId}`);
-        console.log(`   🖼️ عمود الصور: ${category.imageCol}`);
-        console.log(`   💰 عمود الأسعار: ${category.priceCol}`);
-        console.log(`   📏 عمود المقاسات: ${category.sizeCol || 'غير محدد'}`);
-        console.log(`   📋 عدد الأوراق: ${category.sheets?.length || 0}`);
-    });
-    
-    console.log(`\n🔑 API Key: ${apiKey ? 'موجود' : 'مفقود'}`);
-    console.log(`📱 معرف الجهاز: ${deviceId}`);
-    console.log(`👤 المستخدم الحالي: ${currentUser?.name || 'غير مسجل'}`);
-    console.log(`🛒 منتجات في السلة: ${selectedProducts.length}`);
-    
-    console.log('🔧 =========================');
-    console.log('🔧 انتهى التشخيص');
-    console.log('🔧 =========================\n');
-}
-
 // ===== تحميل التطبيق =====
-
 document.addEventListener('DOMContentLoaded', async function() {
-    console.log(`🚀 شي ان العراق v${CONFIG.APP_VERSION} يتم تحميله...`);
+    console.log('🚀 شي ان العراق v' + CONFIG.APP_VERSION + ' يتم تحميله...');
     
     // 1. إنشاء/تحميل معرف الجهاز
     deviceId = getOrCreateDeviceId();
@@ -1730,7 +1455,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // 3. تحميل بيانات المستخدم (إن وجدت)
     currentUser = loadUserData();
-    console.log('👤 المستخدم الحالي:', currentUser?.name || 'غير مسجل');
     
     // 4. تحميل السلة من التخزين المحلي
     loadCartFromStorage();
@@ -1740,30 +1464,23 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // 6. إنشاء شريط تنقل الفئات
     createCategoryNav();
-    console.log('🧭 تم إنشاء شريط التنقل');
     
-    // 7. تحميل صور الفئات مع تأخير للتأكد من تحميل العناصر
-    setTimeout(() => {
-        console.log('⏰ بدء تحميل صور الفئات بعد التأخير...');
-        loadCategoryImages();
-    }, 800);
+    // 7. تحميل صور الفئات - الدالة المُصححة
+    loadCategoryImages();
     
     // 8. إخفاء مربع البحث في البداية
     if (searchBox) {
         searchBox.style.display = 'none';
-        console.log('🔍 تم إخفاء مربع البحث');
     }
     
     // 9. إعداد نموذج التسجيل
     const registrationForm = document.getElementById('userRegistrationForm');
     if (registrationForm) {
         registrationForm.addEventListener('submit', handleUserRegistration);
-        console.log('📝 تم إعداد نموذج التسجيل');
     }
     
     // 10. إعداد أحداث أخرى
     setupEventListeners();
-    console.log('🎧 تم إعداد مستمعي الأحداث');
     
     // 11. عرض رسالة ترحيب مناسبة
     if (currentUser) {
@@ -1772,8 +1489,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         
         const firstName = currentUser.name.split(' ')[0];
         setTimeout(() => {
-            showNotificationSuccess(`أهلاً بعودتك ${firstName} 👋`);
-        }, 1200);
+            showNotificationSuccess('أهلاً بعودتك ' + firstName + ' 👋');
+        }, 1000);
         
         trackAction('user_returned', {
             daysSinceLastActive: Math.floor((Date.now() - new Date(currentUser.lastActive).getTime()) / (1000 * 60 * 60 * 24))
@@ -1781,7 +1498,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     } else {
         setTimeout(() => {
             showNotificationInfo('👋 مرحباً بك في شي ان العراق! تصفح المنتجات واستمتع بالتسوق');
-        }, 2500);
+        }, 2000);
         
         trackAction('new_visitor', { deviceId: deviceId });
     }
@@ -1789,22 +1506,15 @@ document.addEventListener('DOMContentLoaded', async function() {
     // 12. تحديث أزرار المنتجات المضافة للسلة
     setTimeout(() => {
         updateCartButtons();
-    }, 1500);
+    }, 1000);
     
-    // 13. اختبار تحميل الصور (للتشخيص)
-    setTimeout(() => {
-        testImageLoading();
-        debugCategoryImages();
-    }, 3000);
-    
-    console.log(`✅ شي ان العراق v${CONFIG.APP_VERSION} جاهز للاستخدام!`);
+    console.log('✅ شي ان العراق v' + CONFIG.APP_VERSION + ' جاهز للاستخدام!');
     console.log('📊 إحصائيات التطبيق:');
     console.log('- معرف الجهاز:', deviceId);
     console.log('- المستخدم:', currentUser ? currentUser.name : 'غير مسجل');
     console.log('- السلة:', selectedProducts.length, 'منتج');
     console.log('- الإشعارات:', Notification.permission);
     console.log('- الاتصال:', isOnline ? 'متصل' : 'غير متصل');
-    console.log('- الفئات:', Object.keys(categories).length);
 });
 
 // إعداد Service Worker
