@@ -1,0 +1,1395 @@
+// ===== Google Apps Script - النظام المتكامل الكامل لشي ان العراق =====
+// الإصدار 2.1 - محدث لدعم جدول واحد بـ 5 أوراق عمل + نظام إشعارات احترافي
+
+// ===== الإعدادات الموحدة المُحدثة =====
+const SYSTEM_CONFIG = {
+  // معرف الجدول الواحد الذي يحتوي على جميع أوراق العمل
+  MAIN_SHEET_ID: '1ap6gkoczUsqvf0KMoxXroo2uP_wycDGxyg6r-UPFgBQ',
+  
+  // أسماء أوراق العمل
+  SHEETS: {
+    USERS: 'Users',
+    ORDERS: 'Orders', 
+    ANALYTICS: 'Analytics',
+    SUBSCRIPTIONS: 'Subscriptions',
+    NOTIFICATIONS: 'Notifications'
+  },
+  
+  // إعدادات التطبيق
+  WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbzc9ojokNkOcmtINeXR9ijzc5HCfq5Ljgcp_4WIpW5JLGSnJryRvnyZqH8EEwB7tbHk/exec',
+  APP_URL: 'https://peacepanel.github.io/shein-baghdad/',
+  NOTIFICATION_ICON: 'https://peacepanel.github.io/shein-baghdad/icons/icon-192x192.png',
+  WHATSAPP_NUMBER: '9647862799748',
+  
+  // Firebase إعدادات
+  FIREBASE_ENABLED: false, // سيتم تفعيله لاحقاً
+  FIREBASE_SERVER_KEY: 'سيتم_تحديثه_عند_إعداد_Firebase',
+  FCM_ENDPOINT: 'https://fcm.googleapis.com/fcm/send',
+  
+  // إعدادات النظام
+  SYSTEM_VERSION: '2.1.0',
+  LAST_UPDATED: '2025-01-27',
+  TIMEZONE: 'Asia/Baghdad'
+};
+
+// ===== دوال مساعدة للوصول لأوراق العمل =====
+
+function getSheet(sheetName) {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SYSTEM_CONFIG.MAIN_SHEET_ID);
+    let sheet = spreadsheet.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      console.log(`إنشاء ورقة عمل جديدة: ${sheetName}`);
+      sheet = spreadsheet.insertSheet(sheetName);
+      initializeSheet(sheet, sheetName);
+    }
+    
+    return sheet;
+  } catch (error) {
+    console.error(`خطأ في الوصول لورقة العمل ${sheetName}:`, error);
+    throw error;
+  }
+}
+
+function initializeSheet(sheet, sheetName) {
+  console.log(`تهيئة ورقة العمل: ${sheetName}`);
+  
+  const headers = getSheetHeaders(sheetName);
+  if (headers.length > 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    
+    // تنسيق العناوين
+    const headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setBackground('#8B5CF6');
+    headerRange.setFontColor('white');
+    headerRange.setFontWeight('bold');
+    headerRange.setFontSize(12);
+  }
+}
+
+function getSheetHeaders(sheetName) {
+  const headerMap = {
+    [SYSTEM_CONFIG.SHEETS.USERS]: [
+      'التاريخ', 'معرف المستخدم', 'الاسم', 'الهاتف', 'المحافظة', 
+      'العنوان', 'الجنس', 'الاهتمامات', 'الإشعارات', 'تاريخ التسجيل', 
+      'آخر نشاط', 'معلومات الجهاز', 'حالة المستخدم'
+    ],
+    [SYSTEM_CONFIG.SHEETS.ORDERS]: [
+      'التاريخ', 'معرف الطلب', 'معرف المستخدم', 'اسم العميل', 
+      'الهاتف', 'المحافظة', 'العنوان', 'المنتجات', 'المجموع الفرعي',
+      'رسوم التوصيل', 'المجموع الكلي', 'الحالة', 'وقت الطلب', 'ملاحظات'
+    ],
+    [SYSTEM_CONFIG.SHEETS.ANALYTICS]: [
+      'التاريخ', 'نوع الحدث', 'معرف المستخدم', 'التفاصيل', 
+      'المصدر', 'معلومات إضافية', 'المحافظة', 'الجهاز'
+    ],
+    [SYSTEM_CONFIG.SHEETS.SUBSCRIPTIONS]: [
+      'التاريخ', 'معرف المستخدم', 'الاسم', 'الهاتف', 'المحافظة',
+      'نوع الاشتراك', 'الاهتمامات', 'توقيت الإشعارات', 'حالة الاشتراك', 
+      'تاريخ الاشتراك', 'آخر إشعار', 'Firebase Token'
+    ],
+    [SYSTEM_CONFIG.SHEETS.NOTIFICATIONS]: [
+      'التاريخ', 'معرف الإشعار', 'العنوان', 'المحتوى', 'النوع',
+      'الجمهور المستهدف', 'المحافظة المستهدفة', 'الاهتمامات المستهدفة',
+      'وقت الإرسال المجدول', 'الحالة', 'عدد المرسل إليهم', 'معدل النجاح',
+      'تاريخ الإنشاء', 'منشئ الإشعار', 'صورة الإشعار', 'رابط الإجراء'
+    ]
+  };
+  
+  return headerMap[sheetName] || [];
+}
+
+// ===== 1. إدارة المستخدمين المُحدثة =====
+
+function saveUserData(userData) {
+  try {
+    if (!userData || !userData.id || !userData.name || !userData.phone) {
+      return { 
+        success: false, 
+        error: 'بيانات المستخدم ناقصة',
+        required: ['id', 'name', 'phone']
+      };
+    }
+    
+    const sheet = getSheet(SYSTEM_CONFIG.SHEETS.USERS);
+    
+    // البحث عن المستخدم الموجود
+    const data = sheet.getDataRange().getValues();
+    let userRow = -1;
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === userData.id) {
+        userRow = i + 1;
+        break;
+      }
+    }
+    
+    const rowData = [
+      new Date(),
+      userData.id,
+      userData.name,
+      userData.phone,
+      userData.governorate || '',
+      userData.address || '',
+      userData.gender || '',
+      Array.isArray(userData.interests) ? userData.interests.join(',') : (userData.interests || ''),
+      userData.notificationsEnabled || false,
+      userData.registrationDate || new Date().toISOString(),
+      userData.lastActive || new Date().toISOString(),
+      JSON.stringify(userData.deviceInfo || {}),
+      'active'
+    ];
+    
+    const isNewUser = userRow === -1;
+    
+    if (userRow > 0) {
+      sheet.getRange(userRow, 1, 1, rowData.length).setValues([rowData]);
+      console.log('تم تحديث بيانات المستخدم:', userData.id);
+    } else {
+      sheet.appendRow(rowData);
+      console.log('تم إضافة مستخدم جديد:', userData.id);
+      
+      // إضافة للاشتراكات إذا كان جديد
+      if (userData.notificationsEnabled) {
+        addUserToSubscriptions(userData);
+      }
+    }
+    
+    // تتبع تسجيل المستخدم
+    trackUserEvent(userData.id, isNewUser ? 'user_registered' : 'user_updated', {
+      name: userData.name,
+      governorate: userData.governorate,
+      interests: userData.interests
+    });
+    
+    // إرسال إشعار ترحيب للمستخدمين الجدد
+    if (isNewUser && userData.notificationsEnabled) {
+      scheduleWelcomeNotification(userData);
+    }
+    
+    return { 
+      success: true, 
+      userId: userData.id,
+      action: isNewUser ? 'created' : 'updated',
+      message: 'تم حفظ بيانات المستخدم بنجاح',
+      isNewUser: isNewUser
+    };
+    
+  } catch (error) {
+    console.error('خطأ في حفظ بيانات المستخدم:', error);
+    return { 
+      success: false, 
+      error: error.toString(),
+      message: 'فشل في حفظ بيانات المستخدم'
+    };
+  }
+}
+
+function getUserById(userId) {
+  try {
+    const sheet = getSheet(SYSTEM_CONFIG.SHEETS.USERS);
+    const data = sheet.getDataRange().getValues();
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === userId) {
+        return {
+          id: data[i][1],
+          name: data[i][2],
+          phone: data[i][3],
+          governorate: data[i][4],
+          address: data[i][5],
+          gender: data[i][6],
+          interests: data[i][7] ? data[i][7].split(',') : [],
+          notificationsEnabled: data[i][8],
+          registrationDate: data[i][9],
+          lastActive: data[i][10],
+          status: data[i][12] || 'active'
+        };
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('خطأ في الحصول على المستخدم:', error);
+    return null;
+  }
+}
+
+function getAllActiveUsers() {
+  try {
+    const sheet = getSheet(SYSTEM_CONFIG.SHEETS.USERS);
+    const data = sheet.getDataRange().getValues();
+    const users = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (row[8] === true && row[1] && (row[12] === 'active' || !row[12])) {
+        users.push({
+          id: row[1],
+          name: row[2] || 'مستخدم',
+          phone: row[3] || '',
+          governorate: row[4] || 'غير محدد',
+          interests: row[7] ? row[7].split(',').map(i => i.trim()) : [],
+          registrationDate: row[9],
+          lastActive: row[10]
+        });
+      }
+    }
+    
+    return users;
+  } catch (error) {
+    console.error('خطأ في الحصول على المستخدمين النشطين:', error);
+    return [];
+  }
+}
+
+// ===== 2. إدارة الاشتراكات الجديدة =====
+
+function addUserToSubscriptions(userData) {
+  try {
+    const sheet = getSheet(SYSTEM_CONFIG.SHEETS.SUBSCRIPTIONS);
+    
+    // التحقق من وجود الاشتراك
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === userData.id) {
+        console.log('المستخدم مشترك بالفعل:', userData.id);
+        return { success: true, action: 'already_subscribed' };
+      }
+    }
+    
+    const rowData = [
+      new Date(),
+      userData.id,
+      userData.name,
+      userData.phone,
+      userData.governorate || '',
+      'general', // نوع الاشتراك
+      Array.isArray(userData.interests) ? userData.interests.join(',') : (userData.interests || ''),
+      'all_times', // توقيت الإشعارات
+      'active',
+      new Date().toISOString(),
+      '', // آخر إشعار
+      '' // Firebase Token
+    ];
+    
+    sheet.appendRow(rowData);
+    console.log('تم إضافة اشتراك جديد:', userData.id);
+    
+    return { success: true, action: 'subscribed' };
+    
+  } catch (error) {
+    console.error('خطأ في إضافة الاشتراك:', error);
+    return { success: false, error: error.toString() };
+  }
+}
+
+function getSubscribedUsers(filters = {}) {
+  try {
+    const sheet = getSheet(SYSTEM_CONFIG.SHEETS.SUBSCRIPTIONS);
+    const data = sheet.getDataRange().getValues();
+    const subscribers = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (row[8] === 'active' && row[1]) { // حالة نشطة ومعرف موجود
+        const subscriber = {
+          id: row[1],
+          name: row[2] || 'مستخدم',
+          phone: row[3] || '',
+          governorate: row[4] || 'غير محدد',
+          subscriptionType: row[5] || 'general',
+          interests: row[6] ? row[6].split(',').map(i => i.trim()) : [],
+          notificationTiming: row[7] || 'all_times',
+          subscriptionDate: row[9],
+          lastNotification: row[10],
+          firebaseToken: row[11]
+        };
+        
+        // تطبيق الفلاتر
+        let includeUser = true;
+        
+        if (filters.governorate && subscriber.governorate !== filters.governorate) {
+          includeUser = false;
+        }
+        
+        if (filters.interest && !subscriber.interests.includes(filters.interest)) {
+          includeUser = false;
+        }
+        
+        if (filters.subscriptionType && subscriber.subscriptionType !== filters.subscriptionType) {
+          includeUser = false;
+        }
+        
+        if (includeUser) {
+          subscribers.push(subscriber);
+        }
+      }
+    }
+    
+    return subscribers;
+  } catch (error) {
+    console.error('خطأ في الحصول على المشتركين:', error);
+    return [];
+  }
+}
+
+// ===== 3. إدارة الطلبات المُحدثة =====
+
+function saveOrderData(orderData) {
+  try {
+    if (!orderData || !orderData.userId) {
+      return { 
+        success: false, 
+        error: 'بيانات الطلب ناقصة',
+        required: ['userId']
+      };
+    }
+    
+    const sheet = getSheet(SYSTEM_CONFIG.SHEETS.ORDERS);
+    const orderId = `SHIQ-${Date.now()}-${orderData.userId.slice(-4)}`;
+    
+    const rowData = [
+      new Date(),
+      orderId,
+      orderData.userId,
+      orderData.userName || 'غير محدد',
+      orderData.userPhone || 'غير محدد',
+      orderData.governorate || 'غير محدد',
+      orderData.address || 'غير محدد',
+      JSON.stringify(orderData.products || []),
+      orderData.subtotal || 0,
+      orderData.deliveryFee || 0,
+      orderData.total || 0,
+      orderData.status || 'pending',
+      orderData.orderDate || new Date().toISOString(),
+      orderData.notes || ''
+    ];
+    
+    sheet.appendRow(rowData);
+    console.log('تم حفظ بيانات الطلب:', orderId);
+    
+    // تتبع الطلب
+    trackUserEvent(orderData.userId, 'order_placed', {
+      orderId: orderId,
+      total: orderData.total,
+      products: orderData.products?.length || 0,
+      governorate: orderData.governorate
+    }, orderData.governorate);
+    
+    // إشعار الطلب الجديد (سيتم إرساله للإدارة)
+    scheduleOrderNotification(orderId, orderData);
+    
+    return { 
+      success: true, 
+      orderId: orderId,
+      total: orderData.total,
+      message: 'تم حفظ الطلب بنجاح'
+    };
+    
+  } catch (error) {
+    console.error('خطأ في حفظ بيانات الطلب:', error);
+    return { 
+      success: false, 
+      error: error.toString(),
+      message: 'فشل في حفظ الطلب'
+    };
+  }
+}
+
+// ===== 4. نظام الإشعارات الاحترافي الجديد =====
+
+function createNotification(notificationData) {
+  try {
+    if (!notificationData.title || !notificationData.body) {
+      return { 
+        success: false, 
+        error: 'عنوان ومحتوى الإشعار مطلوبان'
+      };
+    }
+    
+    const sheet = getSheet(SYSTEM_CONFIG.SHEETS.NOTIFICATIONS);
+    const notificationId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const rowData = [
+      new Date(),
+      notificationId,
+      notificationData.title,
+      notificationData.body,
+      notificationData.type || 'general',
+      notificationData.audience || 'all',
+      notificationData.targetGovernorate || '',
+      notificationData.targetInterests || '',
+      notificationData.scheduledTime || '',
+      'created',
+      0, // عدد المرسل إليهم
+      '0%', // معدل النجاح
+      new Date().toISOString(),
+      notificationData.creator || 'system',
+      notificationData.image || '',
+      notificationData.actionUrl || SYSTEM_CONFIG.APP_URL
+    ];
+    
+    sheet.appendRow(rowData);
+    console.log('تم إنشاء إشعار جديد:', notificationId);
+    
+    // إذا كان الإشعار فورياً، أرسله الآن
+    if (!notificationData.scheduledTime || notificationData.scheduledTime === 'now') {
+      return sendNotificationById(notificationId);
+    }
+    
+    return { 
+      success: true, 
+      notificationId: notificationId,
+      message: 'تم إنشاء الإشعار بنجاح',
+      scheduled: !!notificationData.scheduledTime
+    };
+    
+  } catch (error) {
+    console.error('خطأ في إنشاء الإشعار:', error);
+    return { 
+      success: false, 
+      error: error.toString(),
+      message: 'فشل في إنشاء الإشعار'
+    };
+  }
+}
+
+function sendNotificationById(notificationId) {
+  try {
+    const sheet = getSheet(SYSTEM_CONFIG.SHEETS.NOTIFICATIONS);
+    const data = sheet.getDataRange().getValues();
+    let notificationRow = -1;
+    let notification = null;
+    
+    // البحث عن الإشعار
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === notificationId) {
+        notificationRow = i + 1;
+        notification = {
+          id: data[i][1],
+          title: data[i][2],
+          body: data[i][3],
+          type: data[i][4],
+          audience: data[i][5],
+          targetGovernorate: data[i][6],
+          targetInterests: data[i][7],
+          image: data[i][14],
+          actionUrl: data[i][15]
+        };
+        break;
+      }
+    }
+    
+    if (!notification) {
+      return { success: false, error: 'الإشعار غير موجود' };
+    }
+    
+    // تحديد الجمهور المستهدف
+    let filters = {};
+    if (notification.targetGovernorate) {
+      filters.governorate = notification.targetGovernorate;
+    }
+    if (notification.targetInterests) {
+      filters.interest = notification.targetInterests;
+    }
+    
+    const targetUsers = getSubscribedUsers(filters);
+    
+    if (targetUsers.length === 0) {
+      // تحديث حالة الإشعار
+      sheet.getRange(notificationRow, 10).setValue('no_targets');
+      return { 
+        success: false, 
+        message: 'لا يوجد مستخدمين مستهدفين',
+        targetCount: 0
+      };
+    }
+    
+    let successCount = 0;
+    let failureCount = 0;
+    
+    // إرسال الإشعارات
+    targetUsers.forEach(user => {
+      const personalizedNotification = {
+        title: personalizeMessage(notification.title, user),
+        body: personalizeMessage(notification.body, user),
+        image: notification.image,
+        actionUrl: notification.actionUrl
+      };
+      
+      const success = sendSingleNotification(user, personalizedNotification);
+      
+      if (success) {
+        successCount++;
+        updateLastNotificationForUser(user.id);
+      } else {
+        failureCount++;
+      }
+    });
+    
+    // تحديث إحصائيات الإشعار
+    const successRate = targetUsers.length > 0 ? 
+      ((successCount / targetUsers.length) * 100).toFixed(2) + '%' : '0%';
+    
+    sheet.getRange(notificationRow, 10).setValue('sent'); // الحالة
+    sheet.getRange(notificationRow, 11).setValue(successCount); // عدد المرسل إليهم
+    sheet.getRange(notificationRow, 12).setValue(successRate); // معدل النجاح
+    
+    console.log(`تم إرسال الإشعار ${notificationId}: ${successCount}/${targetUsers.length} نجح`);
+    
+    // تسجيل في الإحصائيات
+    trackNotificationStats(notificationId, notification.type, targetUsers.length, successCount);
+    
+    return { 
+      success: true, 
+      notificationId: notificationId,
+      sent: successCount, 
+      failed: failureCount,
+      total: targetUsers.length,
+      successRate: successRate,
+      message: `تم إرسال ${successCount} من ${targetUsers.length} إشعار`
+    };
+    
+  } catch (error) {
+    console.error('خطأ في إرسال الإشعار:', error);
+    return { 
+      success: false, 
+      error: error.toString(),
+      message: 'فشل في إرسال الإشعار'
+    };
+  }
+}
+
+function sendSingleNotification(user, notification) {
+  // إذا كان Firebase معطل، محاكاة الإرسال
+  if (!SYSTEM_CONFIG.FIREBASE_ENABLED) {
+    console.log(`محاكاة إرسال إشعار للمستخدم ${user.name}: "${notification.title}"`);
+    return true; // محاكاة نجاح الإرسال
+  }
+  
+  try {
+    const payload = {
+      to: user.firebaseToken,
+      notification: {
+        title: notification.title,
+        body: notification.body,
+        icon: SYSTEM_CONFIG.NOTIFICATION_ICON,
+        image: notification.image || '',
+        click_action: notification.actionUrl || SYSTEM_CONFIG.APP_URL
+      },
+      data: {
+        userId: user.id,
+        type: 'custom_notification',
+        timestamp: new Date().toISOString(),
+        actionUrl: notification.actionUrl || SYSTEM_CONFIG.APP_URL
+      }
+    };
+    
+    const options = {
+      method: 'POST',
+      headers: {
+        'Authorization': 'key=' + SYSTEM_CONFIG.FIREBASE_SERVER_KEY,
+        'Content-Type': 'application/json'
+      },
+      payload: JSON.stringify(payload)
+    };
+    
+    const response = UrlFetchApp.fetch(SYSTEM_CONFIG.FCM_ENDPOINT, options);
+    const result = JSON.parse(response.getContentText());
+    
+    return result.success === 1;
+    
+  } catch (error) {
+    console.error('خطأ في إرسال الإشعار الفردي:', error);
+    return false;
+  }
+}
+
+function updateLastNotificationForUser(userId) {
+  try {
+    const sheet = getSheet(SYSTEM_CONFIG.SHEETS.SUBSCRIPTIONS);
+    const data = sheet.getDataRange().getValues();
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === userId) {
+        sheet.getRange(i + 1, 11).setValue(new Date().toISOString());
+        break;
+      }
+    }
+  } catch (error) {
+    console.error('خطأ في تحديث آخر إشعار:', error);
+  }
+}
+
+// ===== 5. الإشعارات المجدولة والتلقائية =====
+
+function scheduleWelcomeNotification(userData) {
+  const notificationData = {
+    title: `🎉 مرحباً ${userData.name.split(' ')[0]}!`,
+    body: `أهلاً بك في شي ان العراق! استمتع بالتسوق من ${userData.governorate}`,
+    type: 'welcome',
+    audience: 'user_specific',
+    targetGovernorate: userData.governorate,
+    creator: 'system_welcome',
+    scheduledTime: 'now'
+  };
+  
+  return createNotification(notificationData);
+}
+
+function scheduleOrderNotification(orderId, orderData) {
+  const notificationData = {
+    title: '📦 طلب جديد وصل!',
+    body: `طلب رقم ${orderId} من ${orderData.userName} - ${orderData.governorate}`,
+    type: 'new_order',
+    audience: 'admin',
+    creator: 'system_order',
+    scheduledTime: 'now'
+  };
+  
+  return createNotification(notificationData);
+}
+
+function sendDailyMorningNotification() {
+  const notificationData = {
+    title: '☀️ صباح الخير من شي ان العراق',
+    body: 'صباح الخير! تصفح العروض الجديدة اليوم واستمتع بالتسوق',
+    type: 'daily_morning',
+    audience: 'all',
+    creator: 'system_daily',
+    scheduledTime: 'now'
+  };
+  
+  return createNotification(notificationData);
+}
+
+function sendDailyEveningNotification() {
+  const notificationData = {
+    title: '🌆 عروض مسائية خاصة',
+    body: 'مساء الخير! خصومات حصرية وعروض مسائية لا تفوت',
+    type: 'daily_evening',
+    audience: 'all',
+    creator: 'system_daily',
+    scheduledTime: 'now'
+  };
+  
+  return createNotification(notificationData);
+}
+
+function sendWeeklyNotification() {
+  const notificationData = {
+    title: '🎉 عروض نهاية الأسبوع',
+    body: 'استعد لعطلة نهاية الأسبوع مع مجموعة خاصة من العروض',
+    type: 'weekly_special',
+    audience: 'all',
+    creator: 'system_weekly',
+    scheduledTime: 'now'
+  };
+  
+  return createNotification(notificationData);
+}
+
+// إشعارات حسب المحافظة
+function sendGovernorateSpecialNotification(governorate, title, body) {
+  const notificationData = {
+    title: title || `🏛️ عرض خاص لسكان ${governorate}`,
+    body: body || `عرض حصري وخصومات مميزة لسكان ${governorate}`,
+    type: 'governorate_special',
+    audience: 'governorate',
+    targetGovernorate: governorate,
+    creator: 'system_governorate',
+    scheduledTime: 'now'
+  };
+  
+  return createNotification(notificationData);
+}
+
+// إشعارات حسب الاهتمامات
+function sendInterestBasedNotification(interest, title, body) {
+  const notificationData = {
+    title: title || `✨ منتجات جديدة في ${interest}`,
+    body: body || `تصفح أحدث مجموعة من ${interest} بأفضل الأسعار`,
+    type: 'interest_based',
+    audience: 'interest',
+    targetInterests: interest,
+    creator: 'system_interest',
+    scheduledTime: 'now'
+  };
+  
+  return createNotification(notificationData);
+}
+
+// ===== 6. التحليلات والإحصائيات المُحدثة =====
+
+function trackUserEvent(userId, eventType, eventDetails = {}, governorate = '') {
+  try {
+    const sheet = getSheet(SYSTEM_CONFIG.SHEETS.ANALYTICS);
+    
+    const rowData = [
+      new Date(),
+      eventType,
+      userId,
+      JSON.stringify(eventDetails),
+      'web_app',
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        userAgent: eventDetails.userAgent || 'unknown'
+      }),
+      governorate,
+      eventDetails.device || 'web'
+    ];
+    
+    sheet.appendRow(rowData);
+    console.log(`تم تسجيل حدث: ${eventType} للمستخدم ${userId}`);
+    
+  } catch (error) {
+    console.error('خطأ في تتبع الحدث:', error);
+  }
+}
+
+function trackNotificationStats(notificationId, type, targetCount, successCount) {
+  try {
+    trackUserEvent('system', 'notification_sent', {
+      notificationId: notificationId,
+      type: type,
+      targetCount: targetCount,
+      successCount: successCount,
+      successRate: targetCount > 0 ? ((successCount / targetCount) * 100).toFixed(2) + '%' : '0%'
+    });
+  } catch (error) {
+    console.error('خطأ في تسجيل إحصائيات الإشعارات:', error);
+  }
+}
+
+function getSystemStats() {
+  try {
+    const users = getAllActiveUsers();
+    const subscribers = getSubscribedUsers();
+    
+    // إحصائيات المحافظات
+    const governorateStats = {};
+    const interestStats = {};
+    
+    users.forEach(user => {
+      governorateStats[user.governorate] = (governorateStats[user.governorate] || 0) + 1;
+      
+      user.interests.forEach(interest => {
+        if (interest.trim()) {
+          interestStats[interest.trim()] = (interestStats[interest.trim()] || 0) + 1;
+        }
+      });
+    });
+    
+    // إحصائيات الطلبات
+    const ordersSheet = getSheet(SYSTEM_CONFIG.SHEETS.ORDERS);
+    const ordersData = ordersSheet.getDataRange().getValues();
+    const totalOrders = ordersData.length - 1; // -1 للعناوين
+    
+    let totalRevenue = 0;
+    for (let i = 1; i < ordersData.length; i++) {
+      totalRevenue += parseFloat(ordersData[i][10]) || 0; // المجموع الكلي
+    }
+    
+    // إحصائيات الإشعارات
+    const notificationsSheet = getSheet(SYSTEM_CONFIG.SHEETS.NOTIFICATIONS);
+    const notificationsData = notificationsSheet.getDataRange().getValues();
+    const totalNotifications = notificationsData.length - 1;
+    
+    return {
+      success: true,
+      users: {
+        total: users.length,
+        subscribers: subscribers.length,
+        byGovernorate: governorateStats,
+        byInterest: interestStats
+      },
+      orders: {
+        total: totalOrders,
+        totalRevenue: Math.round(totalRevenue),
+        averageOrder: totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0
+      },
+      notifications: {
+        total: totalNotifications,
+        sent: notificationsData.filter(row => row[9] === 'sent').length - 1
+      },
+      topGovernorates: Object.entries(governorateStats)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 5),
+      topInterests: Object.entries(interestStats)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 5),
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('خطأ في الحصول على الإحصائيات:', error);
+    return {
+      success: false,
+      error: error.toString(),
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+// ===== 7. إدارة الإشعارات من ورقة Notifications =====
+
+function getNotificationsFromSheet() {
+  try {
+    const sheet = getSheet(SYSTEM_CONFIG.SHEETS.NOTIFICATIONS);
+    const data = sheet.getDataRange().getValues();
+    const notifications = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      notifications.push({
+        id: row[1],
+        title: row[2],
+        body: row[3],
+        type: row[4],
+        audience: row[5],
+        targetGovernorate: row[6],
+        targetInterests: row[7],
+        scheduledTime: row[8],
+        status: row[9],
+        sentCount: row[10],
+        successRate: row[11],
+        createdAt: row[12],
+        creator: row[13],
+        image: row[14],
+        actionUrl: row[15]
+      });
+    }
+    
+    return { success: true, notifications: notifications };
+  } catch (error) {
+    console.error('خطأ في الحصول على الإشعارات:', error);
+    return { success: false, error: error.toString() };
+  }
+}
+
+function sendPendingNotifications() {
+  try {
+    const sheet = getSheet(SYSTEM_CONFIG.SHEETS.NOTIFICATIONS);
+    const data = sheet.getDataRange().getValues();
+    let sentCount = 0;
+    
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      const status = row[9];
+      const scheduledTime = row[8];
+      const notificationId = row[1];
+      
+      if (status === 'created' && (!scheduledTime || scheduledTime === 'now')) {
+        const result = sendNotificationById(notificationId);
+        if (result.success) {
+          sentCount++;
+        }
+      }
+    }
+    
+    return { 
+      success: true, 
+      message: `تم إرسال ${sentCount} إشعار معلق`,
+      sentCount: sentCount
+    };
+  } catch (error) {
+    console.error('خطأ في إرسال الإشعارات المعلقة:', error);
+    return { success: false, error: error.toString() };
+  }
+}
+
+// ===== 7.5 إدارة صور الفئات =====
+
+// ===== دالة جلب صور الفئات الجديدة =====
+function getCategoryImage(requestData) {
+  try {
+    const { sheetId, sheetName, imageCol } = requestData;
+    
+    console.log('🖼️ طلب صورة للفئة:', sheetName, 'من الجدول:', sheetId);
+    
+    const spreadsheet = SpreadsheetApp.openById(sheetId);
+    const sheet = spreadsheet.getSheetByName(sheetName);
+    
+    if (!sheet) {
+      console.log('❌ الورقة غير موجودة:', sheetName);
+      return { success: false, error: 'الورقة غير موجودة' };
+    }
+    
+    // تحديد فهرس العمود (F=6, G=7, etc.)
+    const imageColIndex = imageCol.charCodeAt(0) - 64; // A=1, B=2, etc.
+    console.log('🔍 البحث في العمود:', imageCol, 'فهرس:', imageColIndex);
+    
+    // جلب البيانات من العمود المحدد (من الصف 2 إلى 50)
+    const range = sheet.getRange(2, imageColIndex, 49, 1);
+    const values = range.getValues();
+    
+    console.log('📊 تم جلب', values.length, 'صف من البيانات');
+    
+    // البحث عن صورة صالحة
+    for (let i = 0; i < values.length; i++) {
+      const cellValue = values[i][0];
+      
+      if (cellValue && cellValue.toString().trim() !== '') {
+        const imageUrl = cellValue.toString().trim();
+        
+        console.log('🔍 فحص الصف', i + 2, ':', imageUrl.substring(0, 50) + '...');
+        
+        // التحقق من صحة رابط الصورة
+        if (imageUrl.includes('http') && 
+            (imageUrl.includes('.jpg') || 
+             imageUrl.includes('.jpeg') || 
+             imageUrl.includes('.png') || 
+             imageUrl.includes('.webp') ||
+             imageUrl.includes('drive.google.com') ||
+             imageUrl.includes('googleusercontent.com'))) {
+          
+          console.log('✅ تم العثور على صورة صالحة:', imageUrl);
+          
+          // تحويل رابط Google Drive إلى رابط مباشر
+          if (imageUrl.includes('drive.google.com')) {
+            const fileIdMatch = imageUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (fileIdMatch) {
+              const directUrl = `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+              console.log('🔄 تم تحويل رابط Google Drive:', directUrl);
+              return { 
+                success: true, 
+                imageUrl: directUrl,
+                originalUrl: imageUrl,
+                rowNumber: i + 2
+              };
+            }
+          }
+          
+          return { 
+            success: true, 
+            imageUrl: imageUrl,
+            rowNumber: i + 2
+          };
+        }
+      }
+    }
+    
+    console.log('⚠️ لم يتم العثور على صورة صالحة في', sheetName);
+    return { 
+      success: false, 
+      error: 'لا توجد صورة صالحة',
+      searchedRows: values.length
+    };
+    
+  } catch (error) {
+    console.error('❌ خطأ في جلب صورة الفئة:', error);
+    return { 
+      success: false, 
+      error: error.toString(),
+      message: 'فشل في الوصول للبيانات'
+    };
+  }
+}
+
+// ===== 8. وظائف مساعدة =====
+
+function personalizeMessage(message, user) {
+  try {
+    const userName = user.name ? user.name.split(' ')[0] : 'عزيزي العميل';
+    const userGov = user.governorate || 'العراق';
+    
+    return message
+      .replace(/\{name\}/g, userName)
+      .replace(/\{governorate\}/g, userGov)
+      .replace(/\{first_name\}/g, userName);
+  } catch (error) {
+    console.error('خطأ في تخصيص الرسالة:', error);
+    return message;
+  }
+}
+
+function getSystemStatus() {
+  try {
+    const users = getAllActiveUsers();
+    const subscribers = getSubscribedUsers();
+    
+    return {
+      success: true,
+      status: 'running',
+      version: SYSTEM_CONFIG.SYSTEM_VERSION,
+      lastUpdated: SYSTEM_CONFIG.LAST_UPDATED,
+      sheets: {
+        id: SYSTEM_CONFIG.MAIN_SHEET_ID,
+        status: 'connected'
+      },
+      firebase: {
+        enabled: SYSTEM_CONFIG.FIREBASE_ENABLED,
+        status: SYSTEM_CONFIG.FIREBASE_ENABLED ? 'ready' : 'disabled'
+      },
+      users: {
+        total: users.length,
+        subscribers: subscribers.length
+      },
+      webApp: {
+        url: SYSTEM_CONFIG.WEB_APP_URL,
+        status: 'deployed'
+      },
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    return {
+      success: false,
+      status: 'error',
+      error: error.toString(),
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+// ===== 9. إعداد المحفزات التلقائية =====
+
+function setupAllTriggers() {
+  try {
+    // حذف المحفزات القديمة
+    const triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(trigger => {
+      const functionName = trigger.getHandlerFunction();
+      if (functionName.includes('Daily') || functionName.includes('Weekly') || functionName.includes('Notification')) {
+        ScriptApp.deleteTrigger(trigger);
+      }
+    });
+    
+    // إنشاء محفزات جديدة
+    ScriptApp.newTrigger('sendDailyMorningNotification')
+      .timeBased()
+      .everyDays(1)
+      .atHour(9)
+      .create();
+    
+    ScriptApp.newTrigger('sendDailyEveningNotification')
+      .timeBased()
+      .everyDays(1)
+      .atHour(18)
+      .create();
+    
+    ScriptApp.newTrigger('sendWeeklyNotification')
+      .timeBased()
+      .onWeekDay(ScriptApp.WeekDay.THURSDAY)
+      .atHour(18)
+      .create();
+    
+    // محفز للإشعارات المعلقة كل ساعة
+    ScriptApp.newTrigger('sendPendingNotifications')
+      .timeBased()
+      .everyHours(1)
+      .create();
+    
+    console.log('تم إعداد جميع المحفزات التلقائية');
+    return { success: true, message: 'تم إعداد المحفزات بنجاح' };
+    
+  } catch (error) {
+    console.error('خطأ في إعداد المحفزات:', error);
+    return { success: false, error: error.toString() };
+  }
+}
+
+// ===== 10. Web App API Endpoints =====
+
+function doPost(e) {
+  try {
+    if (!e.postData || !e.postData.contents) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ 
+          success: false, 
+          error: 'لا توجد بيانات في الطلب',
+          timestamp: new Date().toISOString()
+        }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    const data = JSON.parse(e.postData.contents);
+    const action = data.action;
+    
+    console.log(`📨 Web App API: ${action} في ${new Date().toISOString()}`);
+    
+    let result;
+    
+    switch (action) {
+      // === إدارة المستخدمين ===
+      case 'save_user':
+        result = saveUserData(data.userData);
+        break;
+        
+      case 'get_user':
+        result = { 
+          success: true, 
+          user: getUserById(data.userId)
+        };
+        break;
+        
+      // === إدارة الطلبات ===
+      case 'save_order':
+        result = saveOrderData(data.orderData);
+        break;
+        
+      // === جلب صور الفئات - جديد ===
+      case 'get_category_image':
+        result = getCategoryImage(data);
+        break;
+        
+      // === إدارة الإشعارات ===
+      case 'create_notification':
+        result = createNotification(data.notificationData);
+        break;
+        
+      case 'send_notification':
+        result = sendNotificationById(data.notificationId);
+        break;
+        
+      case 'get_notifications':
+        result = getNotificationsFromSheet();
+        break;
+        
+      case 'send_pending_notifications':
+        result = sendPendingNotifications();
+        break;
+        
+      // === إشعارات خاصة ===
+      case 'send_governorate_notification':
+        result = sendGovernorateSpecialNotification(
+          data.governorate, 
+          data.title, 
+          data.body
+        );
+        break;
+        
+      case 'send_interest_notification':
+        result = sendInterestBasedNotification(
+          data.interest, 
+          data.title, 
+          data.body
+        );
+        break;
+        
+      // === الإحصائيات ===
+      case 'get_stats':
+        result = getSystemStats();
+        break;
+        
+      case 'get_system_status':
+        result = getSystemStatus();
+        break;
+        
+      // === إعدادات النظام ===
+      case 'setup_triggers':
+        result = setupAllTriggers();
+        break;
+        
+      // === اختبار الاتصال ===
+      case 'test_connection':
+        result = { 
+          success: true, 
+          message: '✅ الاتصال ناجح مع Google Apps Script',
+          timestamp: new Date().toISOString(),
+          version: SYSTEM_CONFIG.SYSTEM_VERSION,
+          firebase: SYSTEM_CONFIG.FIREBASE_ENABLED ? 'enabled' : 'disabled',
+          sheets: SYSTEM_CONFIG.MAIN_SHEET_ID
+        };
+        break;
+        
+      default:
+        result = { 
+          success: false, 
+          error: `إجراء غير معروف: ${action}`,
+          availableActions: [
+            'save_user', 'get_user', 'save_order', 'get_category_image',
+            'create_notification', 'send_notification', 'get_notifications',
+            'send_governorate_notification', 'send_interest_notification',
+            'get_stats', 'test_connection', 'setup_triggers'
+          ]
+        };
+    }
+    
+    result.timestamp = result.timestamp || new Date().toISOString();
+    result.action = action;
+    result.version = SYSTEM_CONFIG.SYSTEM_VERSION;
+    
+    console.log(`✅ معالجة ${action}: ${result.success ? 'نجح' : 'فشل'}`);
+    
+    return ContentService
+      .createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    console.error('❌ خطأ في doPost:', error);
+    return ContentService
+      .createTextOutput(JSON.stringify({ 
+        success: false, 
+        error: error.toString(),
+        message: 'خطأ في معالجة الطلب',
+        timestamp: new Date().toISOString()
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  const params = e.parameter;
+  
+  if (params.action === 'status') {
+    return ContentService
+      .createTextOutput(JSON.stringify(getSystemStatus()))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  if (params.action === 'stats') {
+    return ContentService
+      .createTextOutput(JSON.stringify(getSystemStats()))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  return ContentService
+    .createTextOutput(JSON.stringify({
+      success: true,
+      message: 'SHIQ Backend API v' + SYSTEM_CONFIG.SYSTEM_VERSION,
+      timestamp: new Date().toISOString(),
+      firebase: SYSTEM_CONFIG.FIREBASE_ENABLED ? 'enabled' : 'disabled',
+      sheets: {
+        id: SYSTEM_CONFIG.MAIN_SHEET_ID,
+        worksheets: Object.values(SYSTEM_CONFIG.SHEETS)
+      },
+      endpoints: {
+        POST: 'جميع عمليات حفظ البيانات والإشعارات',
+        GET: 'الاستعلامات وحالة النظام'
+      }
+    }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ===== 11. وظائف الاختبار المتقدمة =====
+
+function testCompleteSystem() {
+  console.log('🚀 اختبار النظام المتكامل الكامل v2.1');
+  console.log('===========================================');
+  
+  const results = {};
+  
+  // اختبار 1: الاتصال والإعدادات
+  console.log('1️⃣ اختبار الاتصال...');
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SYSTEM_CONFIG.MAIN_SHEET_ID);
+    console.log('✅ الاتصال بـ Google Sheets يعمل');
+    console.log('📊 معرف الجدول:', SYSTEM_CONFIG.MAIN_SHEET_ID);
+    console.log('📋 أوراق العمل:', Object.values(SYSTEM_CONFIG.SHEETS));
+    results.connection = true;
+  } catch (error) {
+    console.error('❌ خطأ في الاتصال:', error);
+    results.connection = false;
+  }
+  
+  // اختبار 2: أوراق العمل
+  console.log('2️⃣ اختبار أوراق العمل...');
+  try {
+    Object.values(SYSTEM_CONFIG.SHEETS).forEach(sheetName => {
+      const sheet = getSheet(sheetName);
+      console.log(`✅ ورقة ${sheetName} جاهزة`);
+    });
+    results.sheets = true;
+  } catch (error) {
+    console.error('❌ خطأ في أوراق العمل:', error);
+    results.sheets = false;
+  }
+  
+  // اختبار 3: حفظ مستخدم تجريبي
+  console.log('3️⃣ اختبار حفظ مستخدم...');
+  const testUser = {
+    id: 'test_v2_' + Date.now(),
+    name: 'أحمد التجريبي v2.1',
+    phone: '07901234567',
+    governorate: 'بغداد',
+    address: 'شارع الاختبار المتقدم',
+    interests: ['ملابس نسائية', 'اكسسوارات نسائية'],
+    notificationsEnabled: true,
+    registrationDate: new Date().toISOString()
+  };
+  
+  const userResult = saveUserData(testUser);
+  console.log('نتيجة حفظ المستخدم:', userResult);
+  results.userSave = userResult.success;
+  
+  // اختبار 4: حفظ طلب تجريبي
+  console.log('4️⃣ اختبار حفظ طلب...');
+  const testOrder = {
+    userId: testUser.id,
+    userName: testUser.name,
+    userPhone: testUser.phone,
+    governorate: testUser.governorate,
+    products: [
+      { name: 'منتج تجريبي 1', price: 15000 },
+      { name: 'منتج تجريبي 2', price: 25000 }
+    ],
+    subtotal: 40000,
+    deliveryFee: 5000,
+    total: 45000,
+    status: 'test_v2'
+  };
+  
+  const orderResult = saveOrderData(testOrder);
+  console.log('نتيجة حفظ الطلب:', orderResult);
+  results.orderSave = orderResult.success;
+  
+  // اختبار 5: إنشاء إشعار
+  console.log('5️⃣ اختبار إنشاء إشعار...');
+  const testNotification = {
+    title: '🧪 اختبار النظام v2.1',
+    body: 'إشعار تجريبي من النظام المتكامل الجديد',
+    type: 'system_test',
+    audience: 'all',
+    creator: 'test_system'
+  };
+  
+  const notificationResult = createNotification(testNotification);
+  console.log('نتيجة إنشاء الإشعار:', notificationResult);
+  results.notification = notificationResult.success;
+  
+  // اختبار 6: الإحصائيات
+  console.log('6️⃣ اختبار الإحصائيات...');
+  const statsResult = getSystemStats();
+  console.log('إحصائيات النظام:', statsResult);
+  results.stats = statsResult.success;
+  
+  console.log('===========================================');
+  
+  const allTestsPassed = Object.values(results).every(result => result === true);
+  
+  if (allTestsPassed) {
+    console.log('🎉 جميع الاختبارات نجحت! النظام v2.1 جاهز للعمل');
+  } else {
+    console.log('⚠️ بعض الاختبارات واجهت مشاكل');
+  }
+  
+  console.log('تفاصيل النتائج:', results);
+  
+  return {
+    success: allTestsPassed,
+    results: results,
+    version: SYSTEM_CONFIG.SYSTEM_VERSION,
+    timestamp: new Date().toISOString()
+  };
+}
+
+// ===== دوال التهيئة =====
+
+function initializeCompleteSystem() {
+  console.log('🚀 تهيئة النظام المتكامل الكامل...');
+  console.log('النسخة:', SYSTEM_CONFIG.SYSTEM_VERSION);
+  console.log('آخر تحديث:', SYSTEM_CONFIG.LAST_UPDATED);
+  console.log('جدول البيانات:', SYSTEM_CONFIG.MAIN_SHEET_ID);
+  console.log('أوراق العمل:', Object.values(SYSTEM_CONFIG.SHEETS));
+  console.log('Firebase:', SYSTEM_CONFIG.FIREBASE_ENABLED ? 'مفعل' : 'معطل مؤقتاً');
+  console.log('✅ النظام جاهز للعمل!');
+  
+  return getSystemStatus();
+}
+
+// ===== تسجيل بداية تشغيل النظام =====
+console.log('🎯 تم تحميل Google Apps Script لشي ان العراق v' + SYSTEM_CONFIG.SYSTEM_VERSION);
+console.log('🔗 Web App URL: ' + SYSTEM_CONFIG.WEB_APP_URL);
+console.log('📊 جدول البيانات: ' + SYSTEM_CONFIG.MAIN_SHEET_ID);
+console.log('✅ النظام المتكامل جاهز للعمل!');

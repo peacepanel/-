@@ -1,0 +1,184 @@
+{
+  "name": "SHIQ - شي ان العراق",
+  "short_name": "SHIQ",
+  "description": "تطبيق شي ان العراق - تسوق أحدث الأزياء والاكسسوارات بأفضل الأسعار. سلة تسوق ذكية، طلبات عبر واتساب، وتوصيل لجميع المحافظات العراقية",
+  "version": "2.0.0",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#667eea",
+  "theme_color": "#8B5CF6",
+  "lang": "ar",
+  "dir": "rtl",
+  "scope": "./",
+  "categories": ["shopping", "lifestyle", "business", "utilities"],
+  "id": "shiq-iraq-shopping-app",
+  
+  "screenshots": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 720'><rect width='1280' height='720' fill='%23667eea'/><text x='640' y='360' text-anchor='middle' font-size='48' fill='white'>🛍️ شي ان العراق</text></svg>",
+      "sizes": "1280x720",
+      "type": "image/svg+xml",
+      "form_factor": "wide",
+      "label": "تطبيق شي ان العراق - واجهة سطح المكتب"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 750 1334'><rect width='750' height='1334' fill='%23667eea'/><text x='375' y='667' text-anchor='middle' font-size='32' fill='white'>🛍️ شي ان العراق</text></svg>",
+      "sizes": "750x1334",
+      "type": "image/svg+xml",
+      "form_factor": "narrow",
+      "label": "تطبيق شي ان العراق - واجهة الموبايل"
+    }
+  ],
+  
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 72 72'><rect width='72' height='72' rx='16' fill='%238B5CF6'/><text x='36' y='50' text-anchor='middle' font-size='32'>🛍️</text></svg>",
+      "sizes": "72x72",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='20' fill='%238B5CF6'/><text x='48' y='68' text-anchor='middle' font-size='42'>🛍️</text></svg>",
+      "sizes": "96x96", 
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'><rect width='128' height='128' rx='28' fill='%238B5CF6'/><text x='64' y='90' text-anchor='middle' font-size='56'>🛍️</text></svg>",
+      "sizes": "128x128",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 144 144'><rect width='144' height='144' rx='32' fill='%238B5CF6'/><text x='72' y='100' text-anchor='middle' font-size='64'>🛍️</text></svg>",
+      "sizes": "144x144",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 152 152'><rect width='152' height='152' rx='34' fill='%238B5CF6'/><text x='76' y='106' text-anchor='middle' font-size='68'>🛍️</text></svg>",
+      "sizes": "152x152",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='42' fill='%238B5CF6'/><text x='96' y='134' text-anchor='middle' font-size='84'>🛍️</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 384 384'><rect width='384' height='384' rx='84' fill='%238B5CF6'/><text x='192' y='268' text-anchor='middle' font-size='168'>🛍️</text></svg>",
+      "sizes": "384x384",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='112' fill='%238B5CF6'/><text x='256' y='356' text-anchor='middle' font-size='224'>🛍️</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable any"
+    }
+  ],
+  
+  "shortcuts": [
+    {
+      "name": "الاكسسوارات النسائية",
+      "short_name": "اكسسوارات",
+      "description": "تصفح أحدث الاكسسوارات النسائية والمجوهرات",
+      "url": "./index.html?category=accessories",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='20' fill='%238B5CF6'/><text x='48' y='68' text-anchor='middle' font-size='42'>💎</text></svg>",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "الأحذية والحقائب",
+      "short_name": "أحذية",
+      "description": "تصفح أحدث الأحذية والحقائب النسائية",
+      "url": "./index.html?category=shoes",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='20' fill='%238B5CF6'/><text x='48' y='68' text-anchor='middle' font-size='42'>👠</text></svg>",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "السلة",
+      "short_name": "السلة", 
+      "description": "مراجعة المنتجات في سلة التسوق",
+      "url": "./index.html?action=cart",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='20' fill='%2325D366'/><text x='48' y='68' text-anchor='middle' font-size='42'>🛒</text></svg>",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "الملف الشخصي",
+      "short_name": "الملف الشخصي",
+      "description": "عرض وتعديل معلومات الملف الشخصي",
+      "url": "./index.html?action=profile",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='20' fill='%23EF4444'/><text x='48' y='68' text-anchor='middle' font-size='42'>👤</text></svg>",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  
+  "related_applications": [],
+  "prefer_related_applications": false,
+  
+  "edge_side_panel": {
+    "preferred_width": 480
+  },
+  
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  
+  "protocol_handlers": [
+    {
+      "protocol": "web+shiq",
+      "url": "./index.html?action=%s"
+    }
+  ],
+  
+  "file_handlers": [
+    {
+      "action": "./index.html?action=import",
+      "accept": {
+        "text/csv": [".csv"],
+        "application/json": [".json"]
+      }
+    }
+  ],
+  
+  "share_target": {
+    "action": "./index.html?action=share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "images",
+          "accept": ["image/jpeg", "image/png", "image/webp"]
+        }
+      ]
+    }
+  }
+}
