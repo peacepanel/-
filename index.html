@@ -37,7 +37,7 @@
             direction: rtl;
         }
 
-        /* ===== HEADER ===== */
+        /* Header */
         .header {
             background: linear-gradient(135deg, #8B5CF6 0%, #A855F7 50%, #C084FC 100%);
             color: white;
@@ -57,7 +57,11 @@
             letter-spacing: 1px;
         }
 
-        /* ===== INSTALL BANNER ===== */
+        .header .tagline {
+            display: none;
+        }
+
+        /* Install App Banner */
         .install-banner {
             background: linear-gradient(135deg, #10b981 0%, #059669 100%);
             color: white;
@@ -76,7 +80,7 @@
             display: block;
         }
 
-        /* ===== SEARCH ===== */
+        /* Search Box */
         .search-container {
             max-width: 600px;
             margin: 8px auto;
@@ -115,7 +119,7 @@
             font-weight: bold;
         }
 
-        /* ===== NAVIGATION ===== */
+        /* Category Navigation Bar */
         .category-nav {
             background: rgba(255,255,255,0.95);
             padding: 8px 5px;
@@ -165,7 +169,7 @@
             box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4);
         }
 
-        /* ===== CATEGORIES ===== */
+        /* Category Container */
         .category-container {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -194,16 +198,12 @@
             box-shadow: 0 12px 30px rgba(139, 92, 246, 0.15);
         }
 
-        /* ===== صور الفئات - قاعدة واحدة فقط ===== */
         .category img {
             width: 100%;
             height: 75%;
             object-fit: cover;
+            transition: transform 0.4s ease;
             flex-shrink: 0;
-            opacity: 1;
-            display: block;
-            background-color: #f8fafc;
-            transition: transform 0.3s ease;
         }
 
         .category:hover img {
@@ -227,7 +227,7 @@
             letter-spacing: 0.5px;
         }
 
-        /* ===== WORKBOOKS ===== */
+        /* Workbook Container */
         .workbook-container {
             display: flex;
             flex-wrap: wrap;
@@ -261,7 +261,7 @@
             background: linear-gradient(135deg, #7C3AED 0%, #8B5CF6 50%, #A855F7 100%);
         }
 
-        /* ===== PRODUCTS ===== */
+        /* Product Container */
         .products-section {
             max-width: 800px;
             margin: 0 auto;
@@ -292,15 +292,11 @@
             box-shadow: 0 20px 45px rgba(0,0,0,0.15);
         }
 
-        /* ===== صور المنتجات - قاعدة واحدة فقط ===== */
         .product img {
             width: 100%;
             height: 350px;
             object-fit: cover;
             cursor: pointer;
-            opacity: 1;
-            display: block;
-            background-color: #f8fafc;
             transition: transform 0.3s ease;
         }
 
@@ -348,7 +344,7 @@
             font-size: 1.2rem;
         }
 
-        /* ===== BUTTONS ===== */
+        /* Add to Cart Button */
         .add-to-cart-btn {
             width: 100%;
             padding: 20px;
@@ -383,6 +379,7 @@
             100% { transform: scale(1); }
         }
 
+        /* Cart Button */
         .cart-button {
             position: fixed;
             bottom: 25px;
@@ -409,7 +406,7 @@
             background: linear-gradient(135deg, #128C7E 0%, #25D366 100%);
         }
 
-        /* ===== OVERLAY ===== */
+        /* Overlay */
         #overlay {
             position: fixed;
             top: 0;
@@ -435,7 +432,6 @@
             box-shadow: 0 20px 60px rgba(0,0,0,0.15);
             cursor: pointer;
             transition: transform 0.3s ease;
-            opacity: 1;
         }
 
         #enlargedImage:hover {
@@ -481,7 +477,7 @@
             color: #ef4444;
         }
 
-        /* ===== LOADING & MESSAGES ===== */
+        /* Default message */
         .default-message {
             text-align: center;
             color: white;
@@ -496,14 +492,12 @@
             border: 1px solid rgba(255,255,255,0.2);
         }
 
+        /* Loading animation */
         .loading {
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100px;
-            color: white;
-            font-size: 1.1rem;
-            font-weight: bold;
         }
 
         .loading::after {
@@ -514,7 +508,6 @@
             border-top: 3px solid white;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin-right: 15px;
         }
 
         @keyframes spin {
@@ -522,12 +515,13 @@
             100% { transform: rotate(360deg); }
         }
 
+        /* Icons */
         .emoji-icon {
             font-size: 1.2em;
             margin-left: 5px;
         }
 
-        /* ===== MODALS ===== */
+        /* User Registration Modal */
         .modal {
             position: fixed;
             top: 0;
@@ -573,7 +567,6 @@
             margin-bottom: 10px;
         }
 
-        /* ===== FORMS ===== */
         .form-group {
             margin-bottom: 20px;
         }
@@ -660,7 +653,6 @@
             transform: translateY(-1px);
         }
 
-        /* ===== USER PROFILE ===== */
         .user-profile-btn {
             position: fixed;
             top: 20px;
@@ -689,7 +681,7 @@
             display: flex;
         }
 
-        /* ===== RESPONSIVE DESIGN ===== */
+        /* Responsive Design */
         @media (min-width: 769px) {
             .category-nav {
                 margin: 8px 25px;
@@ -768,11 +760,6 @@
                 font-size: 1.1rem;
                 padding: 10px 4px;
                 font-weight: 900;
-            }
-            
-            /* تعديل صور الفئات فقط للموبايل - بدون تكرار */
-            .category img {
-                height: 70%;
             }
             
             .product img {
@@ -874,11 +861,6 @@
                 line-height: 1.1;
             }
             
-            /* تعديل صور الفئات للموبايل الصغير - بدون تكرار */
-            .category img {
-                height: 65%;
-            }
-            
             .product img {
                 height: 220px;
             }
@@ -951,8 +933,7 @@
 
     <div class="category-nav" id="category-nav"></div>
 
-    <div id="categoryContainer" class="category-container"></div>
-
+    <div id="category-container" class="category-container"></div>
 
     <div class="search-container">
         <input type="text" id="searchBox" placeholder="🔍 ابحث عن المنتج..." oninput="searchProduct()">
@@ -1110,7 +1091,6 @@
         </div>
     </div>
 
-   <script src="app.js"></script>
-
+    <script src="app.js"></script>
 </body>
 </html>
