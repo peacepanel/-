@@ -1529,3 +1529,11 @@ if ('serviceWorker' in navigator) {
             });
     });
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('✅ DOM جاهز، بدء تنفيذ الكود...');
+    loadCategoryImages();
+    createCategoryNav();
+    loadCartFromStorage();
+    loadUserData();
+});
