@@ -108,7 +108,7 @@ let deviceId = null;
 let currentCategory = '';
 let isOnline = navigator.onLine;
 
-// عناصر DOM - مُصححة
+// عناصر DOM
 const categoryContainer = document.getElementById('categoryContainer');
 const categoryNav = document.getElementById('category-nav');
 const workbookContainer = document.getElementById('workbook-container');
